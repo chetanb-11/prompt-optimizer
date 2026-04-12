@@ -28,7 +28,7 @@ app.use('/api/chain', chainRoutes);
 
 // ── Health Check ───────────────────────────────────────────
 app.get('/', (_req, res) => {
-  res.json({ status: 'ok', service: 'PromptForge API' });
+  res.json({ status: 'ok', service: 'PromptForge API'});
 });
 
 app.get('/api/health', (_req, res) => {
