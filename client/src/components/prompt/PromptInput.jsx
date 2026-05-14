@@ -1,11 +1,13 @@
 import usePromptStore from '../../store/promptStore';
 import { estimateTokens, countWords, countChars } from '../../utils/tokenCounter';
-import { X, Upload } from 'lucide-react';
+import { extractTextFromPDF } from '../../utils/pdfParser';
+import { X, Upload, Loader2 } from 'lucide-react';
 import { useRef, useState } from 'react';
 
 export default function PromptInput() {
   const { prompt, setPrompt, context, setContext, isLoading } = usePromptStore();
   const [showContext, setShowContext] = useState(false);
+  const [isParsingFile, setIsParsingFile] = useState(false);
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -17,19 +19,31 @@ export default function PromptInput() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.type === 'text/plain' || file.name.endsWith('.md') || file.name.endsWith('.txt')) {
-      const text = await file.text();
+    setIsParsingFile(true);
+    try {
+      let text = '';
+
+      if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+        // Parse PDF to extract readable text
+        text = await extractTextFromPDF(file);
+        if (!text.trim()) {
+          throw new Error('No readable text found in this PDF. It may be a scanned/image-based PDF.');
+        }
+      } else {
+        // Plain text files (.txt, .md, .csv, .json, etc.)
+        text = await file.text();
+      }
+
       setContext(text);
       setShowContext(true);
-    } else {
-      // For other file types, read as text
-      try {
-        const text = await file.text();
-        setContext(text);
-        setShowContext(true);
-      } catch {
-        // ignore
-      }
+    } catch (err) {
+      console.error('File parsing error:', err);
+      setContext(`[Error reading file: ${err.message || 'Could not parse this file.'}]`);
+      setShowContext(true);
+    } finally {
+      setIsParsingFile(false);
+      // Reset file input so the same file can be re-uploaded
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -101,15 +115,23 @@ export default function PromptInput() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".txt,.md,.csv,.json"
+                accept=".txt,.md,.csv,.json,.pdf"
                 onChange={handleFileUpload}
                 className="hidden"
               />
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="text-xs px-2 py-1 rounded-md bg-surface-hover text-text-secondary hover:text-text transition-colors"
+                disabled={isParsingFile}
+                className="text-xs px-2 py-1 rounded-md bg-surface-hover text-text-secondary hover:text-text transition-colors disabled:opacity-50 flex items-center gap-1"
               >
-                Upload File
+                {isParsingFile ? (
+                  <>
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    Parsing...
+                  </>
+                ) : (
+                  'Upload File'
+                )}
               </button>
               {context && (
                 <button
