@@ -1,22 +1,40 @@
 import usePromptStore from '../../store/promptStore';
 import CopyButton from '../common/CopyButton';
-import { Lightbulb, Coins, RefreshCw } from 'lucide-react';
+import { Lightbulb, Coins, RefreshCw, Zap } from 'lucide-react';
 
 export default function OutputPanel() {
-  const { result, isLoading, iterations } = usePromptStore();
+  const { result, isLoading, isStreaming, streamingText, iterations } = usePromptStore();
 
-  if (isLoading) {
+  // ── Streaming State — show tokens appearing in real-time ──
+  if (isStreaming || (isLoading && !result)) {
     return (
       <div className="glass-card p-6 space-y-4 animate-fade-in">
-        <div className="flex items-center gap-3 mb-4">
+        <div className="flex items-center gap-3 mb-2">
           <div className="pulse-dot" />
-          <p className="text-sm text-text-secondary">Optimizing your prompt with Gemini AI...</p>
+          <p className="text-sm text-text-secondary flex items-center gap-2">
+            <Zap className="w-3.5 h-3.5 text-amber-400" />
+            {streamingText
+              ? 'Streaming response from Gemini AI...'
+              : 'Connecting to Gemini AI...'}
+          </p>
         </div>
-        <div className="skeleton h-4 w-full" />
-        <div className="skeleton h-4 w-5/6" />
-        <div className="skeleton h-4 w-4/6" />
-        <div className="skeleton h-4 w-full mt-4" />
-        <div className="skeleton h-4 w-3/4" />
+
+        {streamingText ? (
+          <div className="bg-surface rounded-xl p-4 border border-border">
+            <pre className="whitespace-pre-wrap text-sm text-text leading-relaxed font-mono">
+              {streamingText}
+              <span className="streaming-cursor" />
+            </pre>
+          </div>
+        ) : (
+          <>
+            <div className="skeleton h-4 w-full" />
+            <div className="skeleton h-4 w-5/6" />
+            <div className="skeleton h-4 w-4/6" />
+            <div className="skeleton h-4 w-full mt-4" />
+            <div className="skeleton h-4 w-3/4" />
+          </>
+        )}
       </div>
     );
   }

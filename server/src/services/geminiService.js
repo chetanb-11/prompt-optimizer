@@ -183,6 +183,54 @@ export async function generateText(systemPrompt, userPrompt, options = {}) {
 }
 
 /**
+ * Generate a JSON-structured response from Gemini with streaming.
+ * Streams text chunks via onChunk callback, then parses the full response as JSON.
+ *
+ * @param {string} systemPrompt - System instruction for the model
+ * @param {string} userPrompt - User's input text
+ * @param {object} schema - JSON schema for structured output
+ * @param {Function} onChunk - Callback receiving each text chunk as it arrives
+ * @param {object} [options] - Optional config overrides
+ * @returns {Promise<object>} Parsed JSON response (after streaming completes)
+ */
+export async function generateJSONStream(systemPrompt, userPrompt, schema, onChunk, options = {}) {
+  const response = await callWithRetry(
+    async (model) => {
+      const stream = await ai.models.generateContentStream({
+        model,
+        contents: userPrompt,
+        config: {
+          systemInstruction: systemPrompt,
+          responseMimeType: 'application/json',
+          responseJsonSchema: schema,
+          temperature: options.temperature ?? 0.7,
+          maxOutputTokens: options.maxTokens ?? 4096,
+        },
+      });
+
+      let fullText = '';
+
+      for await (const chunk of stream) {
+        const text = chunk.text || '';
+        if (text) {
+          fullText += text;
+          onChunk(text);
+        }
+      }
+
+      if (!fullText) {
+        throw new AppError('Empty response from AI model.', 502, 'EMPTY_RESPONSE');
+      }
+
+      return JSON.parse(fullText);
+    },
+    options.model || MODEL
+  );
+
+  return response;
+}
+
+/**
  * Count tokens for a given text using the Gemini API.
  */
 export async function countTokens(text) {

@@ -1,4 +1,4 @@
-import { generateJSON, countTokens } from './geminiService.js';
+import { generateJSON, generateJSONStream, countTokens } from './geminiService.js';
 import {
   MODE_PROMPTS,
   PRESET_INSTRUCTIONS,
@@ -96,4 +96,73 @@ function getSystemPrompt(mode, toneStyle) {
   }
 
   return MODE_PROMPTS[mode];
+}
+
+// ═══════════════════════════════════════════════════════════
+// STREAMING VARIANTS (SSE)
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Optimize a prompt with streaming — streams raw text chunks via onChunk,
+ * then returns the full structured result after the stream completes.
+ */
+export async function optimizePromptStream({ prompt, mode, toneStyle, preset, context }, onChunk) {
+  // Build the system prompt
+  let systemPrompt = getSystemPrompt(mode, toneStyle);
+
+  // Append preset-specific instructions if provided
+  if (preset && PRESET_INSTRUCTIONS[preset]) {
+    systemPrompt += '\n\n' + PRESET_INSTRUCTIONS[preset];
+  }
+
+  // Build the user prompt with optional context
+  let userMessage = `PROMPT TO OPTIMIZE:\n"""${prompt}"""`;
+  if (context) {
+    userMessage = `CONTEXT (use this to inform your optimization):\n"""${context}"""\n\n${userMessage}`;
+  }
+
+  // Call Gemini with streaming
+  const result = await generateJSONStream(systemPrompt, userMessage, OPTIMIZE_SCHEMA, onChunk);
+
+  // Count tokens (after stream completes)
+  const [originalTokens, optimizedTokens] = await Promise.all([
+    countTokens(prompt),
+    countTokens(result.optimized),
+  ]);
+
+  // Estimate costs
+  const cost = estimateCost(originalTokens, optimizedTokens);
+
+  return {
+    original: prompt,
+    optimized: result.optimized,
+    explanation: result.explanation,
+    mode,
+    preset: preset || null,
+    tokenCount: {
+      original: originalTokens,
+      optimized: optimizedTokens,
+    },
+    estimatedCost: cost,
+  };
+}
+
+/**
+ * Re-optimize with streaming — streams raw text chunks via onChunk.
+ */
+export async function reOptimizeStream({ prompt, mode, toneStyle, iteration }, onChunk) {
+  let systemPrompt = getSystemPrompt(mode, toneStyle);
+  systemPrompt += `\n\nNOTE: This prompt has already been optimized ${iteration - 1} time(s). Apply further refinements — focus on areas that could still be improved. Do not undo previous optimizations. Be more aggressive with improvements.`;
+
+  const userMessage = `PROMPT TO FURTHER OPTIMIZE (iteration ${iteration}):\n"""${prompt}"""`;
+  const result = await generateJSONStream(systemPrompt, userMessage, OPTIMIZE_SCHEMA, onChunk);
+
+  const optimizedTokens = await countTokens(result.optimized);
+
+  return {
+    optimized: result.optimized,
+    explanation: result.explanation,
+    iteration,
+    tokenCount: optimizedTokens,
+  };
 }

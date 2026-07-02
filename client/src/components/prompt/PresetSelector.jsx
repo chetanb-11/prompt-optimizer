@@ -1,9 +1,10 @@
 import usePromptStore from '../../store/promptStore';
-import { MessageSquare, Bot, Gauge, BookOpen } from 'lucide-react';
+import { MessageSquare, Bot, Gauge, BookOpen, Sparkles } from 'lucide-react';
 
 const PRESETS = [
   { id: 'chatgpt', label: 'ChatGPT', icon: MessageSquare, desc: 'Optimized for ChatGPT conventions' },
   { id: 'claude', label: 'Claude', icon: Bot, desc: 'XML tags, detailed context' },
+  { id: 'gemini', label: 'Gemini', icon: Sparkles, desc: 'Structured output, grounding context' },
   { id: 'api_efficient', label: 'API Efficient', icon: Gauge, desc: 'Minimum tokens, max quality' },
   { id: 'beginner', label: 'Beginner', icon: BookOpen, desc: 'Simple, with examples' },
 ];

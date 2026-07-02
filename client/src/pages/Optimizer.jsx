@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import usePromptStore from '../store/promptStore';
 import useHistoryStore from '../store/historyStore';
 import useAnalyticsStore from '../store/analyticsStore';
-import { optimizePrompt, reOptimizePrompt, scorePrompt } from '../api/client';
+import { optimizePromptStream, reOptimizePromptStream, scorePrompt } from '../api/client';
 import PromptInput from '../components/prompt/PromptInput';
 import OptimizationModes from '../components/prompt/OptimizationModes';
 import PresetSelector from '../components/prompt/PresetSelector';
@@ -17,50 +17,69 @@ export default function Optimizer() {
   const { addEntry } = useHistoryStore();
   const { trackOptimization, trackScore } = useAnalyticsStore();
 
-  const handleOptimize = async () => {
+  // Ref to hold the AbortController for cancelling in-flight streams
+  const streamController = useRef(null);
+
+  const handleOptimize = () => {
     if (!store.prompt.trim()) {
       toast.error('Please enter a prompt to optimize');
       return;
     }
 
+    // Cancel any in-flight stream
+    streamController.current?.abort();
+
     store.setLoading(true);
     store.setResult(null);
     store.setScores(null);
     store.clearIterations();
+    store.clearStreaming();
+    store.setStreaming(true);
+    store.setActiveTab('output');
 
-    try {
-      const result = await optimizePrompt({
+    streamController.current = optimizePromptStream(
+      {
         prompt: store.prompt,
         mode: store.mode,
         toneStyle: store.mode === 'tone' ? store.toneStyle : undefined,
         preset: store.preset,
         context: store.context || undefined,
-      });
+      },
+      {
+        onChunk: (text) => {
+          store.appendStreamingText(text);
+        },
 
-      store.setResult(result);
-      store.setActiveTab('output');
+        onDone: (result) => {
+          store.setResult(result);
+          store.clearStreaming();
+          store.setLoading(false);
 
-      // Track analytics
-      trackOptimization(store.mode, store.preset);
+          // Track analytics
+          trackOptimization(store.mode, store.preset);
 
-      // Save to history
-      addEntry({
-        original: store.prompt,
-        optimized: result.optimized,
-        mode: store.mode,
-        preset: store.preset,
-        explanation: result.explanation,
-      });
+          // Save to history
+          addEntry({
+            original: store.prompt,
+            optimized: result.optimized,
+            mode: store.mode,
+            preset: store.preset,
+            explanation: result.explanation,
+          });
 
-      toast.success('Prompt optimized!');
-    } catch {
-      // Error handled by API interceptor
-    } finally {
-      store.setLoading(false);
-    }
+          toast.success('Prompt optimized!');
+        },
+
+        onError: (err) => {
+          store.clearStreaming();
+          store.setLoading(false);
+          toast.error(err.message || 'Optimization failed.');
+        },
+      }
+    );
   };
 
-  const handleReOptimize = async () => {
+  const handleReOptimize = () => {
     if (!store.result) return;
 
     const iteration = store.iterations.length + 2;
@@ -69,24 +88,41 @@ export default function Optimizer() {
         ? store.iterations[store.iterations.length - 1].optimized
         : store.result.optimized;
 
-    store.setLoading(true);
+    // Cancel any in-flight stream
+    streamController.current?.abort();
 
-    try {
-      const result = await reOptimizePrompt({
+    store.setLoading(true);
+    store.clearStreaming();
+    store.setStreaming(true);
+    store.setActiveTab('output');
+
+    streamController.current = reOptimizePromptStream(
+      {
         prompt: currentPrompt,
         mode: store.mode,
         toneStyle: store.mode === 'tone' ? store.toneStyle : undefined,
         iteration,
-      });
+      },
+      {
+        onChunk: (text) => {
+          store.appendStreamingText(text);
+        },
 
-      store.addIteration(result);
-      trackOptimization(store.mode, store.preset);
-      toast.success(`Iteration ${iteration} complete`);
-    } catch {
-      // handled
-    } finally {
-      store.setLoading(false);
-    }
+        onDone: (result) => {
+          store.addIteration(result);
+          store.clearStreaming();
+          store.setLoading(false);
+          trackOptimization(store.mode, store.preset);
+          toast.success(`Iteration ${iteration} complete`);
+        },
+
+        onError: (err) => {
+          store.clearStreaming();
+          store.setLoading(false);
+          toast.error(err.message || 'Re-optimization failed.');
+        },
+      }
+    );
   };
 
   const handleScore = async () => {
@@ -149,7 +185,7 @@ export default function Optimizer() {
           {store.isLoading ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
-              Optimizing...
+              {store.isStreaming ? 'Streaming...' : 'Optimizing...'}
             </>
           ) : (
             <>
@@ -192,7 +228,7 @@ export default function Optimizer() {
       </div>
 
       {/* Output Tabs & Content */}
-      {(store.result || store.scores || store.isLoading || store.isScoring) && (
+      {(store.result || store.scores || store.isLoading || store.isScoring || store.isStreaming) && (
         <div className="space-y-4 animate-fade-in">
           {/* Tab Bar */}
           <div className="flex items-center gap-1 p-1 bg-surface rounded-xl border border-border w-fit">

@@ -299,6 +299,16 @@ export const PRESET_INSTRUCTIONS = {
 - Add encouraging context ("This will help you...")
 - Include a "What to expect" section describing the response format
 - Make the prompt self-explanatory for someone new to AI`,
+
+  gemini: `ADDITIONAL OPTIMIZATION FOR Google Gemini:
+- Use clear system instruction framing — Gemini excels with explicit role definitions
+- Structure prompts for JSON/structured output when the task suits it
+- Leverage Gemini's strong instruction-following by being precise and direct
+- Add grounding context — Gemini handles long context windows exceptionally well
+- Use numbered steps for multi-part tasks — Gemini follows sequential instructions accurately
+- Specify output format explicitly (Gemini supports JSON, markdown, plain text natively)
+- For reasoning tasks, add "Think step by step and show your reasoning" — Gemini's thinking models benefit greatly
+- Include constraints and edge cases — Gemini adheres to guardrails precisely`,
 };
 
 // ── Scoring System Prompt ──────────────────────────────────

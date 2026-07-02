@@ -13,6 +13,8 @@ const usePromptStore = create((set, get) => ({
   scores: null,
   isLoading: false,
   isScoring: false,
+  isStreaming: false,
+  streamingText: '',
   activeTab: 'output', // output | diff | score
   iterations: [], // For multi-iteration optimization
 
@@ -32,6 +34,12 @@ const usePromptStore = create((set, get) => ({
     set((s) => ({ iterations: [...s.iterations, iteration] })),
 
   clearIterations: () => set({ iterations: [] }),
+
+  // Streaming actions
+  setStreaming: (isStreaming) => set({ isStreaming }),
+  appendStreamingText: (chunk) =>
+    set((s) => ({ streamingText: s.streamingText + chunk })),
+  clearStreaming: () => set({ isStreaming: false, streamingText: '' }),
 
   // Load a prompt from history or template
   loadPrompt: (prompt) =>
@@ -55,6 +63,8 @@ const usePromptStore = create((set, get) => ({
       scores: null,
       isLoading: false,
       isScoring: false,
+      isStreaming: false,
+      streamingText: '',
       activeTab: 'output',
       iterations: [],
     }),
