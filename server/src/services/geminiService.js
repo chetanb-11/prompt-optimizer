@@ -6,8 +6,8 @@ dotenv.config();
 
 // ── Initialize Gemini Client ───────────────────────────────
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-const MODEL = 'gemini-2.5-flash';
-const FALLBACK_MODEL = 'gemini-2.0-flash';
+const MODEL = 'gemini-3.7-flash';
+const FALLBACK_MODEL = 'gemini-2.5-flash';
 
 // ── Retry Configuration ───────────────────────────────────
 const MAX_RETRIES = 3;

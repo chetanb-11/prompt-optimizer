@@ -6,6 +6,10 @@
  */
 
 const PRICING = {
+  'gemini-3.7-flash': {
+    input: 0.15 / 1_000_000,   // $0.00000015 per token
+    output: 0.60 / 1_000_000,  // $0.00000060 per token
+  },
   'gemini-2.5-flash': {
     input: 0.30 / 1_000_000,   // $0.00000030 per token
     output: 2.50 / 1_000_000,  // $0.00000250 per token
@@ -24,11 +28,11 @@ const PRICING = {
  * Estimate the cost of a Gemini API call.
  * @param {number} inputTokens - Number of input tokens
  * @param {number} outputTokens - Number of output tokens
- * @param {string} model - Model name (default: gemini-2.5-flash)
+ * @param {string} model - Model name (default: gemini-3.7-flash)
  * @returns {{ inputCost: string, outputCost: string, totalCost: string }}
  */
-export function estimateCost(inputTokens, outputTokens, model = 'gemini-2.5-flash') {
-  const pricing = PRICING[model] || PRICING['gemini-2.5-flash'];
+export function estimateCost(inputTokens, outputTokens, model = 'gemini-3.7-flash') {
+  const pricing = PRICING[model] || PRICING['gemini-3.7-flash'];
 
   const inputCost = inputTokens * pricing.input;
   const outputCost = outputTokens * pricing.output;
