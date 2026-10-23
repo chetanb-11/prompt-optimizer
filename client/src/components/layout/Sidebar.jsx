@@ -14,7 +14,6 @@ const NAV_ITEMS = [
 ];
 
 export default function Sidebar({
-  statusIndicator,
   collapsed = false,
   setCollapsed,
   mobileOpen = false,
@@ -89,35 +88,25 @@ export default function Sidebar({
         })}
       </nav>
 
-      {/* Footer — Server Status + Collapse Toggle */}
-      <div className="border-t border-border flex-shrink-0">
-        {/* Server Status Indicator */}
-        {statusIndicator && (
-          <div className={`overflow-hidden ${collapsed && !mobileOpen ? 'flex justify-center py-2' : ''}`}>
-            {statusIndicator}
-          </div>
-        )}
-
-        {/* Collapse Toggle — desktop only */}
-        {setCollapsed && (
-          <div className="p-2 hidden lg:block">
-            <button
-              onClick={() => setCollapsed(!collapsed)}
-              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-text-muted hover:text-text hover:bg-surface-hover transition-colors text-xs cursor-pointer"
-              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            >
-              {collapsed ? (
-                <ChevronRight className="w-4 h-4" />
-              ) : (
-                <>
-                  <ChevronLeft className="w-4 h-4" />
-                  <span>Collapse</span>
-                </>
-              )}
-            </button>
-          </div>
-        )}
-      </div>
+      {/* Footer — Collapse Toggle (desktop only) */}
+      {setCollapsed && (
+        <div className="border-t border-border flex-shrink-0 p-2 hidden lg:block">
+          <button
+            onClick={() => setCollapsed(!collapsed)}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-text-muted hover:text-text hover:bg-surface-hover transition-colors text-xs cursor-pointer"
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            {collapsed ? (
+              <ChevronRight className="w-4 h-4" />
+            ) : (
+              <>
+                <ChevronLeft className="w-4 h-4" />
+                <span>Collapse</span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
     </aside>
   );
 }

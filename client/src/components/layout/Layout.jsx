@@ -34,35 +34,46 @@ function ServerStatus({ compact = false }) {
   }, [ping]);
 
   const dotColor = {
-    idle: 'bg-text-muted',
-    waking: 'bg-amber-400 animate-pulse',
+    idle: 'bg-zinc-500',
+    waking: 'bg-amber-400',
     online: 'bg-emerald-400',
-    offline: 'bg-red-400',
+    offline: 'bg-rose-500',
+  }[status];
+
+  const ringColor = {
+    idle: 'bg-zinc-500',
+    waking: 'bg-amber-400',
+    online: 'bg-emerald-400',
+    offline: 'bg-rose-500',
   }[status];
 
   const label = {
-    idle: 'Checking server...',
-    waking: 'Waking up server...',
+    idle: 'Connecting',
+    waking: 'Waking server...',
     online: 'Server online',
-    offline: 'Server unreachable',
+    offline: 'Server offline',
   }[status];
 
-  if (compact) {
-    return (
-      <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-surface border border-border" title={label}>
-        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`} />
-        <span className="text-[10px] text-text-muted font-medium">
-          {status === 'online' ? 'Online' : status === 'waking' ? 'Waking...' : 'Offline'}
-        </span>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex items-center gap-2 px-3 py-1.5" title={label}>
-      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`} />
-      <span className="text-[11px] text-text-muted truncate">{label}</span>
-    </div>
+    <button
+      onClick={ping}
+      title={`${label} — click to refresh connection`}
+      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface/70 hover:bg-surface border border-border/80 hover:border-border transition-all duration-200 backdrop-blur-md shadow-xs cursor-pointer select-none group ${
+        compact ? 'text-[11px]' : 'text-xs'
+      }`}
+    >
+      <span className="relative flex h-2 w-2 flex-shrink-0">
+        {(status === 'online' || status === 'waking') && (
+          <span
+            className={`animate-ping absolute inline-flex h-full w-full rounded-full ${ringColor} opacity-50 duration-1000`}
+          />
+        )}
+        <span className={`relative inline-flex rounded-full h-2 w-2 ${dotColor}`} />
+      </span>
+      <span className="font-medium text-text-muted group-hover:text-text-secondary tracking-tight transition-colors">
+        {label}
+      </span>
+    </button>
   );
 }
 
@@ -100,6 +111,11 @@ export default function Layout({ children }) {
         <ServerStatus compact />
       </header>
 
+      {/* Desktop Top-Right Minimal Status Indicator */}
+      <div className="hidden lg:flex fixed top-5 right-6 xl:right-8 z-30 pointer-events-auto animate-fade-in">
+        <ServerStatus />
+      </div>
+
       {/* Backdrop overlay for mobile drawer */}
       {mobileOpen && (
         <div
@@ -111,7 +127,6 @@ export default function Layout({ children }) {
 
       {/* Sidebar (drawer on mobile, fixed on desktop) */}
       <Sidebar
-        statusIndicator={<ServerStatus />}
         collapsed={collapsed}
         setCollapsed={setCollapsed}
         mobileOpen={mobileOpen}
