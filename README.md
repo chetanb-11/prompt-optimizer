@@ -6,7 +6,7 @@ A full-stack web application that intelligently optimizes, scores, compares, and
 ![Vite](https://img.shields.io/badge/Vite-6-646CFF?logo=vite&logoColor=white)
 ![Tailwind](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss&logoColor=white)
 ![Express](https://img.shields.io/badge/Express-4-000000?logo=express&logoColor=white)
-![Gemini](https://img.shields.io/badge/Gemini_2.5-Flash-4285F4?logo=google&logoColor=white)
+![Gemini](https://img.shields.io/badge/Gemini_3.7-Flash-4285F4?logo=google&logoColor=white)
 
 ---
 
@@ -32,10 +32,11 @@ Enter any prompt → choose an optimization mode → get a dramatically improved
 
 ### Core
 - **5 Optimization Modes** — Clarity, Concise, Reasoning, System Prompt, Tone (formal/technical/creative)
-- **4 One-Click Presets** — ChatGPT-ready, Claude-ready, API-efficient, Beginner-friendly
+- **5 One-Click Presets** — ChatGPT-ready, Claude-ready, Gemini-ready, API-efficient, Beginner-friendly
 - **Prompt Scoring** — 4-dimension analysis (clarity, specificity, completeness, token efficiency) with weighted scoring
 - **Diff View** — Side-by-side + inline diff with word-level change stats
 - **Live Counters** — Real-time word, character, and token counts
+- **Live SSE Streaming** — Token-by-token streaming output with cancellation support
 
 ### Intermediate
 - **Multi-Iteration Optimization** — Re-optimize sequentially with version tracking (v2, v3...)
@@ -53,7 +54,7 @@ Enter any prompt → choose an optimization mode → get a dramatically improved
 - **Prompt History** — Search, tag, favorite, and reload past prompts (persisted in localStorage)
 - **Copy Buttons** — One-click copy on every output
 - **Toast Notifications** — Clear feedback for all actions
-- **Error Handling** — Graceful API error recovery with rate limit detection
+- **Error Handling** — Graceful API error recovery with exponential backoff & rate limit detection
 
 ---
 
@@ -62,19 +63,19 @@ Enter any prompt → choose an optimization mode → get a dramatically improved
 ```
 ┌──────────────────┐     Proxy /api/*      ┌──────────────────┐
 │   React + Vite   │ ──────────────────▶  │  Express Server  │
-│   :5173          │                       │  :3001           │
+│   :5173          │                       │  :3002           │
 │                  │                       │                  │
-│  • Zustand Store │  ◀─── JSON ─────────  │  • Route Layer   │
+│  • Zustand Store │  ◀─── JSON / SSE ───  │  • Route Layer   │
 │  • Tailwind CSS  │                       │  • Service Layer  │
 │  • Recharts      │                       │  • Gemini Service │
 │  • LocalStorage  │                       │  • Prompt Engine  │
 └──────────────────┘                       └────────┬─────────┘
                                                     │
                                                     ▼
-                                           ┌──────────────────┐
-                                           │ Google Gemini API │
-                                           │ (2.5 Flash)       │
-                                           └──────────────────┘
+                                           ┌─────────────────────────────┐
+                                           │      Google Gemini API      │
+                                           │ (3.7 Flash + 2.5 Fallback)  │
+                                           └─────────────────────────────┘
 ```
 
 All Gemini API calls use **structured JSON output** (`responseJsonSchema`) to guarantee parseable, consistent responses.
@@ -93,7 +94,7 @@ All Gemini API calls use **structured JSON output** (`responseJsonSchema`) to gu
 | Icons | Lucide React |
 | Diff Engine | diff (npm) |
 | Backend | Node.js 20+, Express 4 |
-| LLM | @google/genai (Gemini 2.5 Flash) |
+| LLM | @google/genai (Gemini 3.7 Flash, 2.5 Flash fallback) |
 | Storage | LocalStorage (client-side) |
 
 ---
@@ -130,7 +131,7 @@ npm install
 ```bash
 # Terminal 1 — Start the backend
 cd server
-npm run dev          # → http://localhost:3001
+npm run dev          # → http://localhost:3002
 
 # Terminal 2 — Start the frontend
 cd client
@@ -139,7 +140,7 @@ npm run dev          # → http://localhost:5173
 
 Open [http://localhost:5173](http://localhost:5173) in your browser.
 
-> **Note:** The Vite dev server automatically proxies `/api/*` requests to the Express backend, so no CORS issues in development.
+> **Note:** The Vite dev server automatically proxies `/api/*` requests to the Express backend (port 3002), so no CORS issues in development.
 
 ### Building for Production
 
@@ -154,11 +155,11 @@ Serve the built files with any static file server and point your API proxy to th
 
 ## 📡 API Reference
 
-All endpoints accept and return JSON. Base URL: `http://localhost:3001`
+All endpoints accept and return JSON. Base URL: `http://localhost:3002`
 
 ### `POST /api/optimize`
 
-Optimize a prompt using a specified mode.
+Optimize a prompt using a specified mode. Add `?stream=true` or `{ "stream": true }` for real-time SSE streaming.
 
 ```json
 // Request
@@ -166,7 +167,8 @@ Optimize a prompt using a specified mode.
   "prompt": "Write me a python function",
   "mode": "clarity",                    // clarity | concise | reasoning | system_prompt | tone
   "toneStyle": "formal",               // only when mode = "tone" (formal | technical | creative)
-  "preset": "chatgpt",                 // optional: chatgpt | claude | api_efficient | beginner
+  "preset": "chatgpt",                 // optional: chatgpt | claude | gemini | api_efficient | beginner
+  "stream": true,                      // optional: stream SSE chunks
   "context": "Additional context..."   // optional
 }
 
@@ -323,7 +325,7 @@ The core intelligence lives in [`server/src/prompts/systemPrompts.js`](server/sr
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `GEMINI_API_KEY` | Your Google Gemini API key | Required |
-| `PORT` | Backend server port | `3001` |
+| `PORT` | Backend server port | `3002` |
 | `NODE_ENV` | Environment mode | `development` |
 
 ### Rate Limiting

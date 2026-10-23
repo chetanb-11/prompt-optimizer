@@ -37,6 +37,7 @@ export default function ChainBuilder() {
   };
 
   const handleExecute = async () => {
+    if (loading) return;
     if (!prompt.trim()) {
       toast.error('Enter a prompt first');
       return;

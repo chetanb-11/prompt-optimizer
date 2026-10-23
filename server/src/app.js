@@ -15,7 +15,10 @@ const app = express();
 const PORT = process.env.PORT || 3002;
 
 // ── Middleware ──────────────────────────────────────────────
-app.use(cors());
+const corsOptions = process.env.NODE_ENV === 'production' && process.env.CORS_ORIGIN
+  ? { origin: process.env.CORS_ORIGIN.split(','), credentials: true }
+  : {};  // Allow all origins in development
+app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(rateLimiter);
 

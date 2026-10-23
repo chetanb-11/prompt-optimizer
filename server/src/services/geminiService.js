@@ -10,8 +10,8 @@ const MODEL = 'gemini-3.7-flash';
 const FALLBACK_MODEL = 'gemini-2.5-flash';
 
 // ── Retry Configuration ───────────────────────────────────
-const MAX_RETRIES = 3;
-const BASE_DELAY_MS = 1000; // 1s, 2s, 4s exponential backoff
+const MAX_RETRIES = 4;
+const BASE_DELAY_MS = 1000; // 1s, 2s, 4s, 8s exponential backoff
 
 /**
  * Sleep for a specified duration.
@@ -93,7 +93,10 @@ async function callWithRetry(apiFn, primaryModel) {
       if (error instanceof AppError) throw error;
 
       if (isRetryable(error) && attempt < MAX_RETRIES - 1) {
-        const delay = BASE_DELAY_MS * Math.pow(2, attempt);
+        // Add jitter (±25%) to prevent thundering herd during traffic spikes
+        const baseDelay = BASE_DELAY_MS * Math.pow(2, attempt);
+        const jitter = baseDelay * 0.25 * (Math.random() * 2 - 1);
+        const delay = Math.round(baseDelay + jitter);
         console.warn(
           `⚠ Gemini API returned ${error?.status} (attempt ${attempt + 1}/${MAX_RETRIES}). ` +
           `Retrying in ${delay}ms...`

@@ -9,7 +9,13 @@ export function validateBody(rules) {
     const errors = [];
 
     for (const rule of rules) {
-      const value = req.body[rule.field];
+      let value = req.body[rule.field];
+
+      // Trim string values in-place so downstream code doesn't receive whitespace-only strings
+      if (rule.type === 'string' && typeof value === 'string') {
+        value = value.trim();
+        req.body[rule.field] = value;
+      }
 
       // Check required
       if (rule.required && (value === undefined || value === null || value === '')) {

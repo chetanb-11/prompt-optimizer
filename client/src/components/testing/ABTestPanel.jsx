@@ -29,6 +29,7 @@ export default function ABTestPanel() {
   const [selectedWinner, setSelectedWinner] = useState(null);
 
   const handleGenerate = async () => {
+    if (loading) return;
     if (!prompt.trim()) {
       toast.error('Enter a prompt first');
       return;
