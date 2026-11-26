@@ -1,3 +1,4 @@
+import { recordFirstOutput, recordRequestError } from '../middleware/requestDiagnostics.js';
 import { Router } from 'express';
 import { validateBody } from '../middleware/validateRequest.js';
 import { optimizePrompt, reOptimize, optimizePromptStream, reOptimizeStream } from '../services/optimizeService.js';
@@ -20,6 +21,9 @@ function initSSE(res) {
  * Send an SSE event to the client.
  */
 function sendSSE(res, event, data) {
+  if (res.destroyed || res.writableEnded) return;
+  if (event === 'chunk') recordFirstOutput();
+  if (event === 'error') recordRequestError(data.code);
   res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 }
 
