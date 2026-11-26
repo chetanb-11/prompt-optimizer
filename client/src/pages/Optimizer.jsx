@@ -9,7 +9,7 @@ import PresetSelector from '../components/prompt/PresetSelector';
 import OutputPanel from '../components/prompt/OutputPanel';
 import DiffView from '../components/prompt/DiffView';
 import PromptScoreCard from '../components/prompt/PromptScoreCard';
-import { Wand2, Target, RefreshCw, Loader2, Square } from 'lucide-react';
+import { Wand2, Target, RefreshCw, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function Optimizer() {
@@ -22,17 +22,6 @@ export default function Optimizer() {
 
   // Ref to debounce rapid spam-clicks across optimize/score/reoptimize
   const isActionLocked = useRef(false);
-
-  const handleCancel = () => {
-    if (streamController.current) {
-      streamController.current.abort();
-      streamController.current = null;
-    }
-    isActionLocked.current = false;
-    store.clearStreaming();
-    store.setLoading(false);
-    toast('Generation cancelled', { icon: '🛑' });
-  };
 
   const handleOptimize = () => {
     // Debounce guard to reject rapid spam-clicks
@@ -236,18 +225,6 @@ export default function Optimizer() {
         </button>
 
         {/* Cancel Button during streaming / loading */}
-        {store.isLoading && (
-          <button
-            onClick={handleCancel}
-            className="px-5 py-3 rounded-xl font-semibold text-sm bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 hover:border-red-500/50 transition-all flex items-center justify-center gap-2 animate-fade-in shadow-xs cursor-pointer"
-            id="cancel-stream-btn"
-            title="Cancel generation"
-          >
-            <Square className="w-3.5 h-3.5 fill-current" />
-            Cancel
-          </button>
-        )}
-
         <button
           onClick={handleScore}
           disabled={store.isScoring || (!store.prompt.trim() && !store.result)}
@@ -307,7 +284,7 @@ export default function Optimizer() {
           </div>
 
           {/* Tab Content */}
-          {store.activeTab === 'output' && <OutputPanel onCancel={handleCancel} />}
+          {store.activeTab === 'output' && <OutputPanel />}
           {store.activeTab === 'diff' && <DiffView />}
           {store.activeTab === 'score' && <PromptScoreCard />}
         </div>
