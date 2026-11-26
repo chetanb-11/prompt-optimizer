@@ -1,45 +1,12 @@
-import usePromptStore from '../../store/promptStore';
+import usePromptStore, { latestOptimizedText } from '../../store/promptStore';
 import CopyButton from '../common/CopyButton';
 import { Lightbulb, Coins, RefreshCw, Zap } from 'lucide-react';
 
 export default function OutputPanel() {
   const { result, isLoading, isStreaming, streamingText, iterations } = usePromptStore();
 
-  // ── Streaming State — show tokens appearing in real-time ──
-  if (isStreaming || (isLoading && !result)) {
-    return (
-      <div className="glass-card p-6 space-y-4 animate-fade-in">
-        <div className="flex items-center justify-between gap-3 mb-2">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="pulse-dot" />
-            <p className="text-sm text-text-secondary flex items-center gap-2 truncate">
-              <Zap className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
-              {streamingText
-                ? 'Streaming response from Gemini AI...'
-                : 'Connecting to Gemini AI...'}
-            </p>
-          </div>
-        </div>
-
-        {streamingText ? (
-          <div className="bg-surface rounded-xl p-4 border border-border">
-            <pre className="whitespace-pre-wrap text-sm text-text leading-relaxed font-mono">
-              {streamingText}
-              <span className="streaming-cursor" />
-            </pre>
-          </div>
-        ) : (
-          <>
-            <div className="skeleton h-4 w-full" />
-            <div className="skeleton h-4 w-5/6" />
-            <div className="skeleton h-4 w-4/6" />
-            <div className="skeleton h-4 w-full mt-4" />
-            <div className="skeleton h-4 w-3/4" />
-          </>
-        )}
-      </div>
-    );
-  }
+  const streaming = isStreaming || isLoading;
+  if (streaming && !result) return <StreamingPreview text={streamingText} />;
 
   if (!result) {
     return (
@@ -54,13 +21,13 @@ export default function OutputPanel() {
   }
 
   // Show the latest version (from iterations or base result)
-  const latestOptimized =
-    iterations.length > 0 ? iterations[iterations.length - 1].optimized : result.optimized;
+  const latestOptimized = latestOptimizedText({ result, iterations });
   const latestExplanation =
     iterations.length > 0 ? iterations[iterations.length - 1].explanation : result.explanation;
 
   return (
     <div className="space-y-4 animate-fade-in">
+      {streaming && <StreamingPreview text={streamingText} />}
       {/* Optimized Prompt Card */}
       <div className="glass-card p-5">
         <div className="flex items-center justify-between mb-3">
@@ -141,6 +108,41 @@ export default function OutputPanel() {
             ))}
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+function StreamingPreview({ text }) {
+  return (
+    <div className="glass-card p-6 space-y-4 animate-fade-in">
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="pulse-dot" />
+          <p className="text-sm text-text-secondary flex items-center gap-2 truncate">
+            <Zap className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+            {text
+              ? 'Streaming response from Gemini AI...'
+              : 'Connecting to Gemini AI...'}
+          </p>
+        </div>
+      </div>
+
+      {text ? (
+        <div className="bg-surface rounded-xl p-4 border border-border">
+          <pre className="whitespace-pre-wrap text-sm text-text leading-relaxed font-mono">
+            {text}
+            <span className="streaming-cursor" />
+          </pre>
+        </div>
+      ) : (
+        <>
+          <div className="skeleton h-4 w-full" />
+          <div className="skeleton h-4 w-5/6" />
+          <div className="skeleton h-4 w-4/6" />
+          <div className="skeleton h-4 w-full mt-4" />
+          <div className="skeleton h-4 w-3/4" />
+        </>
       )}
     </div>
   );
