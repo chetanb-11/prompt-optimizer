@@ -1,3 +1,5 @@
+import { recordRequestError } from './requestDiagnostics.js';
+
 /**
  * Global error handler middleware.
  * Catches all errors thrown in route handlers and services,
@@ -20,10 +22,7 @@ export function errorHandler(err, _req, res, _next) {
     ? err.message
     : 'An unexpected error occurred. Please try again.';
 
-  // Log non-operational (unexpected) errors
-  if (!err.isOperational) {
-    console.error('❌ Unexpected Error:', err);
-  }
+  recordRequestError(code);
 
   res.status(statusCode).json({
     error: true,
