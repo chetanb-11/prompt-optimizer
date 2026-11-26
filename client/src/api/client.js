@@ -1,3 +1,4 @@
+import { consumeSSEStream } from './stream.js';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 
@@ -120,93 +121,6 @@ export const healthCheck = () => api.get('/health');
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 /**
- * Parse a raw SSE text buffer and extract complete events.
- * Returns { events: [{event, data}], remaining: string }
- */
-function parseSSEBuffer(buffer) {
-  const events = [];
-  const lines = buffer.split('\n');
-  let currentEvent = null;
-  let currentData = null;
-  let remaining = '';
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-
-    if (line.startsWith('event: ')) {
-      currentEvent = line.slice(7);
-    } else if (line.startsWith('data: ')) {
-      currentData = line.slice(6);
-    } else if (line === '' && currentEvent && currentData) {
-      // Empty line = end of event
-      try {
-        events.push({ event: currentEvent, data: JSON.parse(currentData) });
-      } catch {
-        events.push({ event: currentEvent, data: currentData });
-      }
-      currentEvent = null;
-      currentData = null;
-    } else if (line === '' && !currentEvent && !currentData) {
-      // Skip double empty lines
-    } else {
-      // Incomplete event at end of buffer — preserve for next iteration
-      remaining = lines.slice(i).join('\n');
-      return { events, remaining };
-    }
-  }
-
-  // If we have a partial event at the end, preserve it
-  if (currentEvent || currentData) {
-    const parts = [];
-    if (currentEvent) parts.push(`event: ${currentEvent}`);
-    if (currentData) parts.push(`data: ${currentData}`);
-    remaining = parts.join('\n');
-  }
-
-  return { events, remaining };
-}
-
-/**
- * Consume an SSE stream from a fetch response.
- * Calls onChunk(text) for each chunk event, onDone(result) when complete.
- */
-async function consumeSSEStream(response, { onChunk, onDone, onError }) {
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const { events, remaining } = parseSSEBuffer(buffer);
-      buffer = remaining;
-
-      for (const { event, data } of events) {
-        if (event === 'chunk') {
-          onChunk?.(data.text);
-        } else if (event === 'done') {
-          onDone?.(data);
-        } else if (event === 'error') {
-          const isBusy = data.status === 503 || data.status === 429 || data.code === 'AI_OVERLOADED' || data.code === 'RATE_LIMIT_EXCEEDED';
-          const msg = isBusy
-            ? 'AI servers are momentarily busy handling requests. Please wait a few moments and try again.'
-            : (data.message || 'Streaming error occurred.');
-          onError?.({ message: msg, code: data.code, status: data.status });
-        }
-      }
-    }
-  } catch (err) {
-    if (err.name === 'AbortError' || err.message?.toLowerCase().includes('abort') || err.message?.toLowerCase().includes('cancel')) {
-      return; // Silent return on user-initiated cancellation
-    }
-    onError?.({ message: err.message || 'Stream connection lost.', code: 'STREAM_ERROR' });
-  }
-}
-
-/**
  * Optimize a prompt with SSE streaming.
  * Validates input client-side and retries on 503/429 before consuming the stream.
  *
@@ -242,10 +156,10 @@ export function optimizePromptStream(data, { onChunk, onDone, onError }) {
           throw err;
         });
       }
-      return consumeSSEStream(response, { onChunk, onDone, onError });
+      return consumeSSEStream(response, { onChunk, onDone, onError }, controller.signal);
     })
     .catch((err) => {
-      if (err.name === 'AbortError' || err.message?.toLowerCase().includes('abort') || err.message?.toLowerCase().includes('cancel')) {
+      if (controller.signal.aborted || err.name === 'AbortError') {
         return; // User cancelled
       }
       const isBusy = err.status === 503 || err.status === 429 || err.code === 'AI_OVERLOADED' || err.code === 'RATE_LIMIT_EXCEEDED';
@@ -292,10 +206,10 @@ export function reOptimizePromptStream(data, { onChunk, onDone, onError }) {
           throw err;
         });
       }
-      return consumeSSEStream(response, { onChunk, onDone, onError });
+      return consumeSSEStream(response, { onChunk, onDone, onError }, controller.signal);
     })
     .catch((err) => {
-      if (err.name === 'AbortError' || err.message?.toLowerCase().includes('abort') || err.message?.toLowerCase().includes('cancel')) {
+      if (controller.signal.aborted || err.name === 'AbortError') {
         return;
       }
       const isBusy = err.status === 503 || err.status === 429 || err.code === 'AI_OVERLOADED' || err.code === 'RATE_LIMIT_EXCEEDED';
