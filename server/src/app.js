@@ -1,3 +1,4 @@
+import { requestDiagnostics } from './middleware/requestDiagnostics.js';
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -19,6 +20,7 @@ const corsOptions = process.env.NODE_ENV === 'production' && process.env.CORS_OR
   ? { origin: process.env.CORS_ORIGIN.split(','), credentials: true }
   : {};  // Allow all origins in development
 app.use(cors(corsOptions));
+app.use('/api', requestDiagnostics);
 app.use(express.json({ limit: '10mb' }));
 app.use(rateLimiter);
 
