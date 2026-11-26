@@ -128,7 +128,15 @@ const API_BASE = import.meta.env.VITE_API_URL || '/api';
  * @param {object} callbacks - { onChunk, onDone, onError }
  * @returns {AbortController} Controller to cancel the stream
  */
-export function optimizePromptStream(data, { onChunk, onDone, onError }) {
+export function optimizePromptStream(data, callbacks) {
+  return startPromptStream('/optimize', data, callbacks);
+}
+
+export function reOptimizePromptStream(data, callbacks) {
+  return startPromptStream('/optimize/iterate', data, callbacks);
+}
+
+function startPromptStream(path, data, { onChunk, onDone, onError }) {
   const controller = new AbortController();
 
   // Client-side validation — catch empty prompts before hitting the network
@@ -141,8 +149,17 @@ export function optimizePromptStream(data, { onChunk, onDone, onError }) {
     return controller;
   }
 
+  const timeout = setTimeout(() => {
+    controller.abort();
+    onError?.({
+      message: 'Optimization timed out after 60 seconds. Please try again.',
+      code: 'STREAM_TIMEOUT',
+    });
+  }, 60000);
+  controller.signal.addEventListener('abort', () => clearTimeout(timeout), { once: true });
+
   fetchWithRetry(
-    `${API_BASE}/optimize`,
+    `${API_BASE}${path}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -156,7 +173,17 @@ export function optimizePromptStream(data, { onChunk, onDone, onError }) {
           throw err;
         });
       }
-      return consumeSSEStream(response, { onChunk, onDone, onError }, controller.signal);
+      return consumeSSEStream(response, {
+        onChunk,
+        onDone: (result) => {
+          clearTimeout(timeout);
+          onDone?.(result);
+        },
+        onError: (error) => {
+          clearTimeout(timeout);
+          onError?.(error);
+        },
+      }, controller.signal);
     })
     .catch((err) => {
       if (controller.signal.aborted || err.name === 'AbortError') {
@@ -170,57 +197,8 @@ export function optimizePromptStream(data, { onChunk, onDone, onError }) {
         message,
         code: err.code || 'NETWORK_ERROR',
       });
-    });
-
-  return controller;
-}
-
-/**
- * Re-optimize a prompt with SSE streaming.
- * Validates input client-side and retries on 503/429 before consuming the stream.
- */
-export function reOptimizePromptStream(data, { onChunk, onDone, onError }) {
-  const controller = new AbortController();
-
-  // Client-side validation
-  const validationError = validatePromptPayload(data);
-  if (validationError) {
-    Promise.resolve().then(() => {
-      onError?.({ message: validationError, code: 'VALIDATION_ERROR' });
-    });
-    return controller;
-  }
-
-  fetchWithRetry(
-    `${API_BASE}/optimize/iterate`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...data, stream: true }),
-      signal: controller.signal,
-    }
-  )
-    .then((response) => {
-      if (!response.ok) {
-        return response.json().then((err) => {
-          throw err;
-        });
-      }
-      return consumeSSEStream(response, { onChunk, onDone, onError }, controller.signal);
     })
-    .catch((err) => {
-      if (controller.signal.aborted || err.name === 'AbortError') {
-        return;
-      }
-      const isBusy = err.status === 503 || err.status === 429 || err.code === 'AI_OVERLOADED' || err.code === 'RATE_LIMIT_EXCEEDED';
-      const message = isBusy
-        ? 'AI servers are momentarily busy handling requests. Please wait a few moments and try again.'
-        : (err.message || 'Failed to connect to optimization service.');
-      onError?.({
-        message,
-        code: err.code || 'NETWORK_ERROR',
-      });
-    });
+    .finally(() => clearTimeout(timeout));
 
   return controller;
 }
