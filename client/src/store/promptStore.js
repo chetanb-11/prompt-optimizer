@@ -1,5 +1,9 @@
 import { create } from 'zustand';
 
+export function latestOptimizedText({ iterations, result }) {
+  return iterations.at(-1)?.optimized ?? result?.optimized;
+}
+
 const usePromptStore = create((set, get) => ({
   // ── Input State ───────────────────────────────────────
   prompt: '',

@@ -1,5 +1,5 @@
-import { useState, useRef } from 'react';
-import usePromptStore from '../store/promptStore';
+import { useState, useRef, useEffect } from 'react';
+import usePromptStore, { latestOptimizedText } from '../store/promptStore';
 import useHistoryStore from '../store/historyStore';
 import useAnalyticsStore from '../store/analyticsStore';
 import { optimizePromptStream, reOptimizePromptStream, scorePrompt } from '../api/client';
@@ -17,163 +17,119 @@ export default function Optimizer() {
   const { addEntry } = useHistoryStore();
   const { trackOptimization, trackScore } = useAnalyticsStore();
 
-  // Ref to hold the AbortController for cancelling in-flight streams
-  const streamController = useRef(null);
+  const [failure, setFailure] = useState(null);
+  const activeRequest = useRef(null);
+  const busy = store.isLoading || store.isScoring;
 
-  // Ref to debounce rapid spam-clicks across optimize/score/reoptimize
-  const isActionLocked = useRef(false);
+  useEffect(() => () => {
+    const request = activeRequest.current;
+    if (!request) return;
+    activeRequest.current = null;
+    request.controller?.abort();
+    const state = usePromptStore.getState();
+    state.clearStreaming();
+    state.setLoading(false);
+    state.setScoring(false);
+  }, []);
 
-  const handleOptimize = () => {
-    // Debounce guard to reject rapid spam-clicks
-    if (isActionLocked.current || store.isLoading) return;
-
-    if (!store.prompt.trim()) {
+  function optimize(refine = false) {
+    if (activeRequest.current || busy) return;
+    const prompt = refine ? latestOptimizedText(store) : store.prompt;
+    if (!prompt?.trim()) {
       toast.error('Please enter a prompt to optimize');
       return;
     }
 
-    isActionLocked.current = true;
-    setTimeout(() => {
-      isActionLocked.current = false;
-    }, 800);
-
-    // Cancel any in-flight stream
-    streamController.current?.abort();
-
+    const request = {};
+    activeRequest.current = request;
+    setFailure(null);
     store.setLoading(true);
-    store.setResult(null);
-    store.setScores(null);
-    store.clearIterations();
     store.clearStreaming();
     store.setStreaming(true);
     store.setActiveTab('output');
 
-    streamController.current = optimizePromptStream(
-      {
-        prompt: store.prompt,
-        mode: store.mode,
-        toneStyle: store.mode === 'tone' ? store.toneStyle : undefined,
-        preset: store.preset,
-        context: store.context || undefined,
+    const iteration = store.iterations.length + 2;
+    const startStream = refine ? reOptimizePromptStream : optimizePromptStream;
+    request.controller = startStream({
+      prompt,
+      mode: store.mode,
+      toneStyle: store.mode === 'tone' ? store.toneStyle : undefined,
+      ...(refine ? { iteration } : { preset: store.preset, context: store.context || undefined }),
+    }, {
+      onChunk(text) {
+        if (activeRequest.current === request) store.appendStreamingText(text);
       },
-      {
-        onChunk: (text) => {
-          store.appendStreamingText(text);
-        },
-
-        onDone: (result) => {
-          isActionLocked.current = false;
+      onDone(result) {
+        if (activeRequest.current !== request) return;
+        activeRequest.current = null;
+        if (refine) {
+          store.addIteration(result);
+        } else {
+          store.clearIterations();
           store.setResult(result);
-          store.clearStreaming();
-          store.setLoading(false);
-
-          // Track analytics
-          trackOptimization(store.mode, store.preset);
-
-          // Save to history
           addEntry({
-            original: store.prompt,
+            original: prompt,
             optimized: result.optimized,
             mode: store.mode,
             preset: store.preset,
             explanation: result.explanation,
           });
-
-          toast.success('Prompt optimized!');
-        },
-
-        onError: (err) => {
-          isActionLocked.current = false;
-          store.clearStreaming();
-          store.setLoading(false);
-          toast.error(err.message || 'Optimization failed.');
-        },
-      }
-    );
-  };
-
-  const handleReOptimize = () => {
-    if (isActionLocked.current || store.isLoading) return;
-    if (!store.result) return;
-
-    isActionLocked.current = true;
-    setTimeout(() => {
-      isActionLocked.current = false;
-    }, 800);
-
-    const iteration = store.iterations.length + 2;
-    const currentPrompt =
-      store.iterations.length > 0
-        ? store.iterations[store.iterations.length - 1].optimized
-        : store.result.optimized;
-
-    // Cancel any in-flight stream
-    streamController.current?.abort();
-
-    store.setLoading(true);
-    store.clearStreaming();
-    store.setStreaming(true);
-    store.setActiveTab('output');
-
-    streamController.current = reOptimizePromptStream(
-      {
-        prompt: currentPrompt,
-        mode: store.mode,
-        toneStyle: store.mode === 'tone' ? store.toneStyle : undefined,
-        iteration,
+        }
+        store.setScores(null);
+        store.clearStreaming();
+        store.setLoading(false);
+        trackOptimization(store.mode, store.preset);
+        toast.success(refine ? `Iteration ${iteration} complete` : 'Prompt optimized!');
       },
-      {
-        onChunk: (text) => {
-          store.appendStreamingText(text);
-        },
+      onError(error) {
+        if (activeRequest.current !== request) return;
+        activeRequest.current = null;
+        store.clearStreaming();
+        store.setLoading(false);
+        setFailure({
+          action: refine ? 'refine' : 'optimize',
+          message: error.message || 'Optimization failed. Please try again.',
+        });
+      },
+    });
+  }
 
-        onDone: (result) => {
-          isActionLocked.current = false;
-          store.addIteration(result);
-          store.clearStreaming();
-          store.setLoading(false);
-          trackOptimization(store.mode, store.preset);
-          toast.success(`Iteration ${iteration} complete`);
-        },
-
-        onError: (err) => {
-          isActionLocked.current = false;
-          store.clearStreaming();
-          store.setLoading(false);
-          toast.error(err.message || 'Re-optimization failed.');
-        },
-      }
-    );
-  };
-
-  const handleScore = async () => {
-    if (isActionLocked.current || store.isScoring) return;
-
-    const textToScore = store.result?.optimized || store.prompt;
-    if (!textToScore?.trim()) {
+  async function handleScore() {
+    if (activeRequest.current || busy) return;
+    const text = latestOptimizedText(store) || store.prompt;
+    if (!text.trim()) {
       toast.error('Enter or optimize a prompt first');
       return;
     }
 
-    isActionLocked.current = true;
-    setTimeout(() => {
-      isActionLocked.current = false;
-    }, 800);
-
+    const request = {};
+    activeRequest.current = request;
+    setFailure(null);
     store.setScoring(true);
     store.setActiveTab('score');
-
     try {
-      const result = await scorePrompt(textToScore);
-      store.setScores(result);
-      trackScore(result.overall);
-    } catch {
-      // handled by interceptor
+      const scores = await scorePrompt(text);
+      if (activeRequest.current !== request) return;
+      const current = usePromptStore.getState();
+      if ((latestOptimizedText(current) || current.prompt) !== text) return;
+      store.setScores(scores);
+      trackScore(scores.overall);
+    } catch (error) {
+      if (activeRequest.current === request) {
+        setFailure({ action: 'score', message: error.message || 'Scoring failed. Please try again.' });
+      }
     } finally {
-      isActionLocked.current = false;
-      store.setScoring(false);
+      if (activeRequest.current === request) {
+        activeRequest.current = null;
+        store.setScoring(false);
+      }
     }
-  };
+  }
+
+  function retry() {
+    if (failure.action === 'score') return handleScore();
+    optimize(failure.action === 'refine');
+  }
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
@@ -206,8 +162,8 @@ export default function Optimizer() {
       {/* Action Buttons */}
       <div className="flex flex-wrap items-center gap-3">
         <button
-          onClick={handleOptimize}
-          disabled={store.isLoading || !store.prompt.trim()}
+          onClick={() => optimize()}
+          disabled={busy || !store.prompt.trim()}
           className="px-6 sm:px-8 py-3 rounded-xl font-semibold text-sm bg-gradient-to-r from-primary to-accent text-white hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-lg shadow-primary/20 cursor-pointer"
           id="optimize-btn"
         >
@@ -224,10 +180,9 @@ export default function Optimizer() {
           )}
         </button>
 
-        {/* Cancel Button during streaming / loading */}
         <button
           onClick={handleScore}
-          disabled={store.isScoring || (!store.prompt.trim() && !store.result)}
+          disabled={busy || (!store.prompt.trim() && !store.result)}
           className="px-5 sm:px-6 py-3 rounded-xl font-semibold text-sm bg-surface border border-border text-text-secondary hover:text-text hover:bg-surface-hover hover:border-border-light disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 cursor-pointer"
           id="score-btn"
         >
@@ -241,8 +196,8 @@ export default function Optimizer() {
 
         {store.result && (
           <button
-            onClick={handleReOptimize}
-            disabled={store.isLoading}
+            onClick={() => optimize(true)}
+            disabled={busy}
             className="px-5 sm:px-6 py-3 rounded-xl font-semibold text-sm bg-surface border border-accent/20 text-accent-light hover:bg-accent/10 disabled:opacity-40 transition-all flex items-center justify-center gap-2 animate-fade-in cursor-pointer"
             id="reoptimize-btn"
           >
@@ -258,7 +213,7 @@ export default function Optimizer() {
       </div>
 
       {/* Output Tabs & Content */}
-      {(store.result || store.scores || store.isLoading || store.isScoring || store.isStreaming) && (
+      {(failure || store.result || store.scores || store.isLoading || store.isScoring || store.isStreaming) && (
         <div className="space-y-4 animate-fade-in">
           {/* Tab Bar — horizontal scroll on mobile */}
           <div className="flex items-center gap-1 p-1 bg-surface rounded-xl border border-border w-full sm:w-fit overflow-x-auto">
@@ -283,6 +238,15 @@ export default function Optimizer() {
               ))}
           </div>
 
+          {failure && (
+            <div className="glass-card flex flex-wrap items-center justify-between gap-3 p-4">
+              <p role="alert" className="text-sm text-text">{failure.message}</p>
+              <button type="button" onClick={retry} disabled={busy}
+                className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-text">
+                Retry
+              </button>
+            </div>
+          )}
           {/* Tab Content */}
           {store.activeTab === 'output' && <OutputPanel />}
           {store.activeTab === 'diff' && <DiffView />}

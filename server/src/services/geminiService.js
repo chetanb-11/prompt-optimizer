@@ -1,3 +1,4 @@
+import { logModelEvent } from '../middleware/requestDiagnostics.js';
 import { GoogleGenAI } from '@google/genai';
 import { AppError } from '../middleware/errorHandler.js';
 import dotenv from 'dotenv';
@@ -34,6 +35,9 @@ function isRetryable(error) {
 function classifyGeminiError(error) {
   const status = error?.status || error?.httpStatusCode;
 
+  if (status === 408 || status === 504 || error?.name === 'TimeoutError') {
+    return new AppError('AI request timed out. Please try again.', 504, 'AI_TIMEOUT');
+  }
   if (status === 429) {
     return new AppError(
       'AI rate limit exceeded. Please wait a moment and try again.',
@@ -97,10 +101,7 @@ async function callWithRetry(apiFn, primaryModel) {
         const baseDelay = BASE_DELAY_MS * Math.pow(2, attempt);
         const jitter = baseDelay * 0.25 * (Math.random() * 2 - 1);
         const delay = Math.round(baseDelay + jitter);
-        console.warn(
-          `⚠ Gemini API returned ${error?.status} (attempt ${attempt + 1}/${MAX_RETRIES}). ` +
-          `Retrying in ${delay}ms...`
-        );
+        logModelEvent('model_retry', primaryModel, error);
         await sleep(delay);
         continue;
       }
@@ -110,16 +111,16 @@ async function callWithRetry(apiFn, primaryModel) {
   // ── Fallback to secondary model ──
   if (primaryModel !== FALLBACK_MODEL) {
     try {
-      console.warn(`⚠ Primary model (${primaryModel}) failed. Falling back to ${FALLBACK_MODEL}...`);
+      logModelEvent('model_fallback', FALLBACK_MODEL, lastError);
       return await apiFn(FALLBACK_MODEL);
     } catch (fallbackError) {
-      console.error('Fallback model also failed:', fallbackError?.message);
+      logModelEvent('fallback_failed', FALLBACK_MODEL, fallbackError);
       // Fall through to throw the original error
     }
   }
 
   // ── All attempts exhausted ──
-  console.error('Gemini API Error (all retries exhausted):', lastError?.message || lastError);
+  logModelEvent('model_failed', primaryModel, lastError);
   throw classifyGeminiError(lastError);
 }
 
@@ -244,7 +245,7 @@ export async function countTokens(text) {
     });
     return response.totalTokens;
   } catch (error) {
-    console.error('Token count error:', error?.message);
+    logModelEvent('token_count_failed', MODEL, error);
     // Fallback: rough estimate (~4 chars per token)
     return Math.ceil(text.length / 4);
   }
