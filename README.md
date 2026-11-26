@@ -111,7 +111,7 @@ All Gemini API calls use **structured JSON output** (`responseJsonSchema`) to gu
 ```bash
 # Clone the repo
 git clone https://github.com/chetanb-11/prompt-optimizer.git
-cd promptOptimizer
+cd prompt-optimizer
 
 # Install backend dependencies
 cd server
