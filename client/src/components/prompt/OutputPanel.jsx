@@ -1,8 +1,8 @@
 import usePromptStore from '../../store/promptStore';
 import CopyButton from '../common/CopyButton';
-import { Lightbulb, Coins, RefreshCw, Zap, Square } from 'lucide-react';
+import { Lightbulb, Coins, RefreshCw, Zap } from 'lucide-react';
 
-export default function OutputPanel({ onCancel }) {
+export default function OutputPanel() {
   const { result, isLoading, isStreaming, streamingText, iterations } = usePromptStore();
 
   // ── Streaming State — show tokens appearing in real-time ──
@@ -19,16 +19,6 @@ export default function OutputPanel({ onCancel }) {
                 : 'Connecting to Gemini AI...'}
             </p>
           </div>
-          {onCancel && (
-            <button
-              onClick={onCancel}
-              className="text-xs px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 hover:border-red-500/40 flex items-center gap-1.5 transition-colors flex-shrink-0 cursor-pointer shadow-xs"
-              title="Stop streaming response"
-            >
-              <Square className="w-3 h-3 fill-current" />
-              <span>Cancel</span>
-            </button>
-          )}
         </div>
 
         {streamingText ? (
