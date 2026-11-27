@@ -1,6 +1,6 @@
 import usePromptStore, { latestOptimizedText } from '../../store/promptStore';
 import CopyButton from '../common/CopyButton';
-import { Lightbulb, Coins, RefreshCw, Zap } from 'lucide-react';
+import { Lightbulb, Coins, RefreshCw } from 'lucide-react';
 
 export default function OutputPanel() {
   const { result, isLoading, isStreaming, streamingText, iterations } = usePromptStore();
@@ -116,33 +116,21 @@ export default function OutputPanel() {
 function StreamingPreview({ text }) {
   return (
     <div className="glass-card p-6 space-y-4 animate-fade-in">
-      <div className="flex items-center justify-between gap-3 mb-2">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="pulse-dot" />
-          <p className="text-sm text-text-secondary flex items-center gap-2 truncate">
-            <Zap className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
-            {text
-              ? 'Streaming response from Gemini AI...'
-              : 'Connecting to Gemini AI...'}
-          </p>
-        </div>
-      </div>
-
       {text ? (
         <div className="bg-surface rounded-xl p-4 border border-border">
           <pre className="whitespace-pre-wrap text-sm text-text leading-relaxed font-mono">
             {text}
-            <span className="streaming-cursor" />
+            <span className="streaming-cursor" aria-hidden="true" />
           </pre>
         </div>
       ) : (
-        <>
+        <div aria-hidden="true" className="space-y-4">
           <div className="skeleton h-4 w-full" />
           <div className="skeleton h-4 w-5/6" />
           <div className="skeleton h-4 w-4/6" />
           <div className="skeleton h-4 w-full mt-4" />
           <div className="skeleton h-4 w-3/4" />
-        </>
+        </div>
       )}
     </div>
   );

@@ -18,8 +18,27 @@ export default function Optimizer() {
   const { trackOptimization, trackScore } = useAnalyticsStore();
 
   const [failure, setFailure] = useState(null);
+  const [completion, setCompletion] = useState('');
+  const [streamOpen, setStreamOpen] = useState(false);
+  const [slowRequest, setSlowRequest] = useState(false);
   const activeRequest = useRef(null);
   const busy = store.isLoading || store.isScoring;
+
+  const waiting = busy && !store.streamingText;
+  useEffect(() => {
+    if (!waiting) return;
+    const timer = setTimeout(() => setSlowRequest(true), 10000);
+    return () => clearTimeout(timer);
+  }, [waiting]);
+
+  let status = completion;
+  if (store.isScoring) {
+    status = slowRequest ? 'Still waiting for a score. The request is active.' : 'Scoring prompt…';
+  } else if (store.isLoading) {
+    if (store.streamingText) status = 'Receiving output…';
+    else if (slowRequest) status = 'Still waiting for output. The request is active.';
+    else status = streamOpen ? 'Waiting for the first output…' : 'Sending optimization request…';
+  }
 
   useEffect(() => () => {
     const request = activeRequest.current;
@@ -43,6 +62,9 @@ export default function Optimizer() {
     const request = {};
     activeRequest.current = request;
     setFailure(null);
+    setCompletion('');
+    setSlowRequest(false);
+    setStreamOpen(false);
     store.setLoading(true);
     store.clearStreaming();
     store.setStreaming(true);
@@ -56,6 +78,9 @@ export default function Optimizer() {
       toneStyle: store.mode === 'tone' ? store.toneStyle : undefined,
       ...(refine ? { iteration } : { preset: store.preset, context: store.context || undefined }),
     }, {
+      onOpen() {
+        if (activeRequest.current === request) setStreamOpen(true);
+      },
       onChunk(text) {
         if (activeRequest.current === request) store.appendStreamingText(text);
       },
@@ -79,7 +104,7 @@ export default function Optimizer() {
         store.clearStreaming();
         store.setLoading(false);
         trackOptimization(store.mode, store.preset);
-        toast.success(refine ? `Iteration ${iteration} complete` : 'Prompt optimized!');
+        setCompletion(refine ? `Iteration ${iteration} complete.` : 'Optimization complete.');
       },
       onError(error) {
         if (activeRequest.current !== request) return;
@@ -105,6 +130,8 @@ export default function Optimizer() {
     const request = {};
     activeRequest.current = request;
     setFailure(null);
+    setCompletion('');
+    setSlowRequest(false);
     store.setScoring(true);
     store.setActiveTab('score');
     try {
@@ -114,6 +141,7 @@ export default function Optimizer() {
       if ((latestOptimizedText(current) || current.prompt) !== text) return;
       store.setScores(scores);
       trackScore(scores.overall);
+      setCompletion('Score ready.');
     } catch (error) {
       if (activeRequest.current === request) {
         setFailure({ action: 'score', message: error.message || 'Scoring failed. Please try again.' });
@@ -170,7 +198,7 @@ export default function Optimizer() {
           {store.isLoading ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
-              {store.isStreaming ? 'Streaming...' : 'Optimizing...'}
+              Optimizing…
             </>
           ) : (
             <>
@@ -191,7 +219,7 @@ export default function Optimizer() {
           ) : (
             <Target className="w-4 h-4" />
           )}
-          Score
+          {store.isScoring ? 'Scoring…' : 'Score'}
         </button>
 
         {store.result && (
@@ -211,6 +239,23 @@ export default function Optimizer() {
           </button>
         )}
       </div>
+
+      <div role="status" aria-atomic="true" className={status ? 'text-sm text-text-secondary' : 'sr-only'}>
+        {status}
+      </div>
+      {failure && (
+        <div className="glass-card flex flex-wrap items-center justify-between gap-3 p-4">
+          <p role="alert" className="text-sm text-text">{failure.message}</p>
+          <button
+            type="button"
+            onClick={retry}
+            disabled={busy}
+            className="min-h-11 rounded-lg border border-border px-4 text-sm font-semibold text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          >
+            Retry {failure.action === 'score' ? 'scoring' : failure.action === 'refine' ? 're-optimization' : 'optimization'}
+          </button>
+        </div>
+      )}
 
       {/* Output Tabs & Content */}
       {(failure || store.result || store.scores || store.isLoading || store.isScoring || store.isStreaming) && (
@@ -238,15 +283,6 @@ export default function Optimizer() {
               ))}
           </div>
 
-          {failure && (
-            <div className="glass-card flex flex-wrap items-center justify-between gap-3 p-4">
-              <p role="alert" className="text-sm text-text">{failure.message}</p>
-              <button type="button" onClick={retry} disabled={busy}
-                className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-text">
-                Retry
-              </button>
-            </div>
-          )}
           {/* Tab Content */}
           {store.activeTab === 'output' && <OutputPanel />}
           {store.activeTab === 'diff' && <DiffView />}
