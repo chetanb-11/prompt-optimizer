@@ -1,6 +1,8 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 
+import { AppError } from './errorHandler.js';
+
 const requests = new AsyncLocalStorage();
 const operations = new Map([
   ['/optimize', 'optimize'], ['/optimize/iterate', 'reoptimize'],
@@ -8,16 +10,22 @@ const operations = new Map([
 ]);
 
 export function requestDiagnostics(req, res, next) {
-  const operation = operations.get(req.path.replace(/\/$/, ''));
+  const operation = operations.get(req.path.toLowerCase().replace(/\/$/, ''));
   if (req.method !== 'POST' || !operation) return next();
 
+  const controller = new AbortController();
+  const deadline = setTimeout(() => {
+    controller.abort(new AppError('AI request timed out. Please try again.', 504, 'AI_TIMEOUT'));
+  }, 55000);
   const request = {
+    signal: controller.signal,
     requestId: randomUUID(), operation, started: performance.now(),
     firstOutputMs: null, errorCode: null,
   };
   res.setHeader('X-Request-Id', request.requestId);
 
   function finish(outcome) {
+    clearTimeout(deadline);
     res.off('finish', onFinish);
     res.off('close', onClose);
     console.info(JSON.stringify({
@@ -31,11 +39,16 @@ export function requestDiagnostics(req, res, next) {
     finish(request.errorCode || res.statusCode >= 400 ? 'failed' : 'completed');
   }
   function onClose() {
+    controller.abort(new AppError('Client disconnected.', 499, 'CLIENT_DISCONNECTED'));
     finish('client_disconnected');
   }
   res.once('finish', onFinish);
   res.once('close', onClose);
   requests.run(request, next);
+}
+
+export function requestSignal() {
+  return requests.getStore()?.signal;
 }
 
 export function recordFirstOutput() {
@@ -55,5 +68,12 @@ export function logModelEvent(event, model, error) {
   console.warn(JSON.stringify({
     event, requestId: requests.getStore()?.requestId ?? null, model,
     providerStatus: Number.isInteger(status) && status > 0 ? status : null,
+  }));
+}
+
+export function recordModelTiming(stage, started) {
+  console.info(JSON.stringify({
+    event: 'model_timing', requestId: requests.getStore()?.requestId ?? null,
+    stage, durationMs: Math.round(performance.now() - started),
   }));
 }
