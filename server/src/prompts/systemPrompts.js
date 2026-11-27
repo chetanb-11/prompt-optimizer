@@ -6,14 +6,14 @@
 // ── Response Schemas (Gemini Structured Output) ────────────
 
 export const OPTIMIZE_SCHEMA = {
-  type: 'OBJECT',
+  type: 'object',
   properties: {
     optimized: {
-      type: 'STRING',
+      type: 'string',
       description: 'The optimized version of the user prompt',
     },
     explanation: {
-      type: 'STRING',
+      type: 'string',
       description: 'Brief explanation of what was improved and why',
     },
   },
@@ -21,40 +21,40 @@ export const OPTIMIZE_SCHEMA = {
 };
 
 export const SCORE_SCHEMA = {
-  type: 'OBJECT',
+  type: 'object',
   properties: {
     scores: {
-      type: 'OBJECT',
+      type: 'object',
       properties: {
         clarity: {
-          type: 'OBJECT',
+          type: 'object',
           properties: {
-            score: { type: 'INTEGER', description: 'Score from 1-10' },
-            feedback: { type: 'STRING', description: 'Specific feedback for this dimension' },
+            score: { type: 'integer', description: 'Score from 1-10' },
+            feedback: { type: 'string', description: 'Specific feedback for this dimension' },
           },
           required: ['score', 'feedback'],
         },
         specificity: {
-          type: 'OBJECT',
+          type: 'object',
           properties: {
-            score: { type: 'INTEGER' },
-            feedback: { type: 'STRING' },
+            score: { type: 'integer' },
+            feedback: { type: 'string' },
           },
           required: ['score', 'feedback'],
         },
         completeness: {
-          type: 'OBJECT',
+          type: 'object',
           properties: {
-            score: { type: 'INTEGER' },
-            feedback: { type: 'STRING' },
+            score: { type: 'integer' },
+            feedback: { type: 'string' },
           },
           required: ['score', 'feedback'],
         },
         tokenEfficiency: {
-          type: 'OBJECT',
+          type: 'object',
           properties: {
-            score: { type: 'INTEGER' },
-            feedback: { type: 'STRING' },
+            score: { type: 'integer' },
+            feedback: { type: 'string' },
           },
           required: ['score', 'feedback'],
         },
@@ -62,12 +62,12 @@ export const SCORE_SCHEMA = {
       required: ['clarity', 'specificity', 'completeness', 'tokenEfficiency'],
     },
     overall: {
-      type: 'NUMBER',
+      type: 'number',
       description: 'Weighted average score (1-10)',
     },
     suggestions: {
-      type: 'ARRAY',
-      items: { type: 'STRING' },
+      type: 'array',
+      items: { type: 'string' },
       description: 'Actionable improvement suggestions',
     },
   },
@@ -75,17 +75,17 @@ export const SCORE_SCHEMA = {
 };
 
 export const COMPARE_SCHEMA = {
-  type: 'OBJECT',
+  type: 'object',
   properties: {
     variants: {
-      type: 'ARRAY',
+      type: 'array',
       items: {
-        type: 'OBJECT',
+        type: 'object',
         properties: {
-          id: { type: 'STRING', description: 'Variant label (A, B, C, etc.)' },
-          optimized: { type: 'STRING' },
-          explanation: { type: 'STRING' },
-          approach: { type: 'STRING', description: 'Brief name for the optimization approach used' },
+          id: { type: 'string', description: 'Variant label (A, B, C, etc.)' },
+          optimized: { type: 'string' },
+          explanation: { type: 'string' },
+          approach: { type: 'string', description: 'Brief name for the optimization approach used' },
         },
         required: ['id', 'optimized', 'explanation', 'approach'],
       },
@@ -95,14 +95,14 @@ export const COMPARE_SCHEMA = {
 };
 
 export const CONVERT_SCHEMA = {
-  type: 'OBJECT',
+  type: 'object',
   properties: {
     converted: {
-      type: 'STRING',
+      type: 'string',
       description: 'The prompt converted to the requested format',
     },
     explanation: {
-      type: 'STRING',
+      type: 'string',
       description: 'Explanation of the format and how to use it',
     },
   },
