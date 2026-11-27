@@ -21,11 +21,12 @@ const MODEL = 'gemini-3.7-flash';
  */
 export async function generateJSON(systemPrompt, userPrompt, schema, options = {}) {
   const response = await generateWithRetry(
-    async (model) => {
+    async (model, signal) => {
       const res = await ai.models.generateContent({
         model,
         contents: userPrompt,
         config: {
+          abortSignal: signal,
           systemInstruction: systemPrompt,
           responseMimeType: 'application/json',
           responseJsonSchema: schema,
@@ -52,11 +53,12 @@ export async function generateJSON(systemPrompt, userPrompt, schema, options = {
  */
 export async function generateText(systemPrompt, userPrompt, options = {}) {
   const response = await generateWithRetry(
-    async (model) => {
+    async (model, signal) => {
       const res = await ai.models.generateContent({
         model,
         contents: userPrompt,
         config: {
+          abortSignal: signal,
           systemInstruction: systemPrompt,
           temperature: options.temperature ?? 0.7,
           maxOutputTokens: options.maxTokens ?? 4096,
@@ -84,11 +86,12 @@ export async function generateText(systemPrompt, userPrompt, options = {}) {
  */
 export async function generateJSONStream(systemPrompt, userPrompt, schema, onChunk, options = {}) {
   const response = await generateWithRetry(
-    async (model) => {
+    async (model, signal) => {
       const stream = await ai.models.generateContentStream({
         model,
         contents: userPrompt,
         config: {
+          abortSignal: signal,
           systemInstruction: systemPrompt,
           responseMimeType: 'application/json',
           responseJsonSchema: schema,
@@ -99,12 +102,19 @@ export async function generateJSONStream(systemPrompt, userPrompt, schema, onChu
 
       let fullText = '';
 
-      for await (const chunk of stream) {
-        const text = chunk.text || '';
-        if (text) {
-          fullText += text;
-          onChunk(text);
+      try {
+        for await (const chunk of stream) {
+          signal?.throwIfAborted();
+          const text = chunk.text || '';
+          if (text) {
+            fullText += text;
+            onChunk(text);
+          }
         }
+      } catch (error) {
+        signal?.throwIfAborted();
+        if (!fullText) throw error;
+        throw new AppError('Stream interrupted. Please try again.', 502, 'STREAM_INTERRUPTED');
       }
 
       if (!fullText) {
