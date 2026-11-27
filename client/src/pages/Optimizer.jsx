@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import usePromptStore, { latestOptimizedText } from '../store/promptStore';
+import usePromptStore from '../store/promptStore';
 import useHistoryStore from '../store/historyStore';
 import useAnalyticsStore from '../store/analyticsStore';
 import { optimizePromptStream, reOptimizePromptStream, scorePrompt } from '../api/client';
-import PromptInput from '../components/prompt/PromptInput';
+import PromptInput, { PromptContext } from '../components/prompt/PromptInput';
 import OptimizationModes, { MODES, TONE_OPTIONS } from '../components/prompt/OptimizationModes';
 import PresetSelector, { PRESETS } from '../components/prompt/PresetSelector';
 import OutputPanel from '../components/prompt/OutputPanel';
@@ -18,12 +18,19 @@ export default function Optimizer() {
   const { trackOptimization, trackScore } = useAnalyticsStore();
 
   const [failure, setFailure] = useState(null);
-  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [selectedVersion, setSelectedVersion] = useState(null);
+  const [comparisonOpen, setComparisonOpen] = useState(false);
   const [completion, setCompletion] = useState('');
   const [streamOpen, setStreamOpen] = useState(false);
   const [slowRequest, setSlowRequest] = useState(false);
   const activeRequest = useRef(null);
   const busy = store.isLoading || store.isScoring;
+  const versionCount = store.result ? store.iterations.length + 1 : 0;
+  const version = Math.min(selectedVersion ?? versionCount, versionCount);
+  const displayedResult = version > 1 ? store.iterations[version - 2] : store.result;
+  const displayedPrompt = displayedResult?.optimized ?? store.prompt;
+  const versionLabel = version ? `Version ${version}` : 'Your draft';
+  const scoreMatches = store.scores?.version === version && store.scores?.scoredText === displayedPrompt;
   const modeLabel = MODES.find((mode) => mode.id === store.mode)?.label;
   const toneLabel = store.mode === 'tone' && TONE_OPTIONS.find((tone) => tone.id === store.toneStyle)?.label;
   const presetLabel = PRESETS.find((preset) => preset.id === store.preset)?.label ?? 'No preset';
@@ -58,7 +65,7 @@ export default function Optimizer() {
 
   function optimize(refine = false) {
     if (activeRequest.current || busy) return;
-    const prompt = refine ? latestOptimizedText(store) : store.prompt;
+    const prompt = refine ? displayedResult?.optimized : store.prompt;
     if (!prompt?.trim()) {
       toast.error('Please enter a prompt to optimize');
       return;
@@ -73,7 +80,6 @@ export default function Optimizer() {
     store.setLoading(true);
     store.clearStreaming();
     store.setStreaming(true);
-    store.setActiveTab('output');
 
     const iteration = store.iterations.length + 2;
     const startStream = refine ? reOptimizePromptStream : optimizePromptStream;
@@ -96,7 +102,7 @@ export default function Optimizer() {
           store.addIteration(result);
         } else {
           store.clearIterations();
-          store.setResult(result);
+          store.setResult({ ...result, original: prompt });
           addEntry({
             original: prompt,
             optimized: result.optimized,
@@ -105,11 +111,12 @@ export default function Optimizer() {
             explanation: result.explanation,
           });
         }
-        store.setScores(null);
+        setSelectedVersion(null);
+        if (!refine) store.setScores(null);
         store.clearStreaming();
         store.setLoading(false);
         trackOptimization(store.mode, store.preset);
-        setCompletion(refine ? `Iteration ${iteration} complete.` : 'Optimization complete.');
+        setCompletion(refine ? `Version ${iteration} ready.` : 'Optimization complete.');
       },
       onError(error) {
         if (activeRequest.current !== request) return;
@@ -126,7 +133,7 @@ export default function Optimizer() {
 
   async function handleScore() {
     if (activeRequest.current || busy) return;
-    const text = latestOptimizedText(store) || store.prompt;
+    const text = displayedPrompt;
     if (!text.trim()) {
       toast.error('Enter or optimize a prompt first');
       return;
@@ -138,13 +145,11 @@ export default function Optimizer() {
     setCompletion('');
     setSlowRequest(false);
     store.setScoring(true);
-    store.setActiveTab('score');
     try {
       const scores = await scorePrompt(text);
       if (activeRequest.current !== request) return;
-      const current = usePromptStore.getState();
-      if ((latestOptimizedText(current) || current.prompt) !== text) return;
-      store.setScores(scores);
+      if (!version && usePromptStore.getState().prompt !== text) return;
+      store.setScores({ ...scores, version, scoredText: text });
       trackScore(scores.overall);
       setCompletion('Score ready.');
     } catch (error) {
@@ -165,150 +170,117 @@ export default function Optimizer() {
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6 max-w-6xl mx-auto">
-      {/* Page Header */}
-      <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-text tracking-tight flex items-center gap-3">
-          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center flex-shrink-0">
-            <Wand2 className="w-5 h-5 text-white" />
-          </div>
-          Prompt Optimizer
-        </h1>
-        <p className="text-xs sm:text-sm text-text-muted mt-1 ml-0 sm:ml-[52px]">
-          Enhance your prompts for maximum LLM effectiveness
-        </p>
-      </div>
+    <div className="mx-auto max-w-6xl space-y-6">
+      <h1 className="text-2xl font-bold tracking-tight text-text">Prompt Optimizer</h1>
 
-      {/* Input Section */}
-      <PromptInput />
+      <div className="grid items-start gap-6 lg:grid-cols-2">
+        <section aria-label="Prompt editor" className="min-w-0 space-y-4">
+          <PromptInput />
 
-      {/* Action Buttons */}
-      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-        <button
-          onClick={() => optimize()}
-          disabled={busy || !store.prompt.trim()}
-          className="flex-1 sm:flex-none px-4 sm:px-8 py-3 rounded-xl font-semibold text-sm bg-gradient-to-r from-primary to-accent text-white hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-lg shadow-primary/20 cursor-pointer"
-          id="optimize-btn"
-        >
-          {store.isLoading ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Optimizing…
-            </>
-          ) : (
-            <>
-              <Wand2 className="w-4 h-4" />
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              id="optimize-btn"
+              onClick={() => optimize()}
+              disabled={busy || !store.prompt.trim()}
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-gradient-to-r from-primary to-accent px-6 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {store.isLoading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Wand2 className="h-4 w-4" aria-hidden="true" />}
               Optimize
-            </>
+            </button>
+            <span className="text-xs text-text-secondary">{optionsSummary}{store.context.trim() ? ' · Context added' : ''}</span>
+          </div>
+
+          <details className="glass-card group">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between rounded-xl px-4 py-2 text-sm font-semibold text-text focus-visible:outline-2 focus-visible:outline-primary">
+              Options
+              <ChevronDown aria-hidden="true" className="h-4 w-4 text-text-secondary group-open:rotate-180" />
+            </summary>
+            <div className="space-y-5 border-t border-border p-4">
+              <OptimizationModes />
+              <PresetSelector />
+              <PromptContext />
+            </div>
+          </details>
+        </section>
+
+        <section aria-label="Result" className="min-w-0 space-y-3">
+          <p role="status" aria-atomic="true" className={status ? 'text-sm text-text-secondary' : 'sr-only'}>
+            {status}
+          </p>
+          {failure && (
+            <div className="glass-card flex flex-wrap items-center gap-3 p-4">
+              <p role="alert" className="flex-1 text-sm text-text">{failure.message}</p>
+              <button
+                type="button"
+                onClick={retry}
+                disabled={busy}
+                className="min-h-11 rounded-lg border border-border px-4 text-sm font-semibold text-text focus-visible:outline-2 focus-visible:outline-primary"
+              >
+                Retry {failure.action === 'score' ? 'scoring' : failure.action === 'refine' ? 'refinement' : 'optimization'}
+              </button>
+            </div>
           )}
-        </button>
 
-        <button
-          onClick={handleScore}
-          disabled={busy || (!store.prompt.trim() && !store.result)}
-          className="px-4 sm:px-6 py-3 rounded-xl font-semibold text-sm bg-surface border border-border text-text-secondary hover:text-text hover:bg-surface-hover hover:border-border-light disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 cursor-pointer"
-          id="score-btn"
-        >
-          {store.isScoring ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <Target className="w-4 h-4" />
+          <OutputPanel result={displayedResult} version={version} isLoading={store.isLoading} />
+
+          {displayedResult && (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              {versionCount > 1 && (
+                <label className="flex items-center gap-2 text-sm text-text-secondary">
+                  Version history
+                  <select
+                    value={version}
+                    onChange={(event) => setSelectedVersion(Number(event.target.value))}
+                    disabled={busy}
+                    className="min-h-10 rounded-lg border border-border bg-surface px-2 text-sm text-text"
+                  >
+                    {Array.from({ length: versionCount }, (_, index) => (
+                      <option key={index} value={index + 1}>Version {index + 1}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              <button
+                type="button"
+                id="reoptimize-btn"
+                onClick={() => optimize(true)}
+                disabled={busy}
+                className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border px-3 text-sm font-medium text-text hover:bg-surface-hover disabled:opacity-40"
+              >
+                <RefreshCw aria-hidden="true" className="h-4 w-4" />
+                Refine version {version}
+              </button>
+            </div>
           )}
-          {store.isScoring ? 'Scoring…' : 'Score'}
-        </button>
 
-        {store.result && (
-          <button
-            onClick={() => optimize(true)}
-            disabled={busy}
-            className="px-5 sm:px-6 py-3 rounded-xl font-semibold text-sm bg-surface border border-accent/20 text-accent-light hover:bg-accent/10 disabled:opacity-40 transition-all flex items-center justify-center gap-2 animate-fade-in cursor-pointer"
-            id="reoptimize-btn"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Re-optimize
-            {store.iterations.length > 0 && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent/20 font-mono">
-                v{store.iterations.length + 2}
-              </span>
-            )}
-          </button>
-        )}
+          {displayedResult && (
+            <details className="glass-card" onToggle={(event) => setComparisonOpen(event.currentTarget.open)}>
+              <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-text">Compare with original</summary>
+              <div className="border-t border-border p-4">
+                {comparisonOpen && <DiffView original={store.result.original} optimized={displayedResult.optimized} />}
+              </div>
+            </details>
+          )}
+
+          <details className="glass-card">
+            <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-text">Prompt score</summary>
+            <div className="space-y-3 border-t border-border p-4">
+              <button
+                type="button"
+                id="score-btn"
+                onClick={handleScore}
+                disabled={busy || !displayedPrompt.trim()}
+                className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border px-3 text-sm font-medium text-text hover:bg-surface-hover disabled:opacity-40"
+              >
+                <Target aria-hidden="true" className="h-4 w-4" />
+                {version ? `Score version ${version}` : 'Score draft'}
+              </button>
+              {scoreMatches && <PromptScoreCard label={versionLabel} />}
+            </div>
+          </details>
+        </section>
       </div>
-
-      <div role="status" aria-atomic="true" className={status ? 'text-sm text-text-secondary' : 'sr-only'}>
-        {status}
-      </div>
-      {failure && (
-        <div className="glass-card flex flex-wrap items-center justify-between gap-3 p-4">
-          <p role="alert" className="text-sm text-text">{failure.message}</p>
-          <button
-            type="button"
-            onClick={retry}
-            disabled={busy}
-            className="min-h-11 rounded-lg border border-border px-4 text-sm font-semibold text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-          >
-            Retry {failure.action === 'score' ? 'scoring' : failure.action === 'refine' ? 're-optimization' : 'optimization'}
-          </button>
-        </div>
-      )}
-
-      <div className="space-y-3">
-        <button
-          type="button"
-          aria-expanded={optionsOpen}
-          aria-controls="optimization-options"
-          onClick={() => setOptionsOpen((open) => !open)}
-          className="flex w-full items-center justify-between gap-3 rounded-xl border border-border bg-surface px-4 py-3 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary sm:hidden"
-        >
-          <span className="min-w-0">
-            <span className="block text-sm font-semibold text-text">Optimization options</span>
-            <span className="mt-0.5 block text-xs text-text-secondary">{optionsSummary}</span>
-          </span>
-          <ChevronDown aria-hidden="true" className={`w-4 h-4 shrink-0 text-text-secondary transition-transform ${optionsOpen ? 'rotate-180' : ''}`} />
-        </button>
-
-        <div id="optimization-options" className={`${optionsOpen ? 'grid' : 'hidden sm:grid'} grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6`}>
-          <div className="lg:col-span-2">
-            <OptimizationModes />
-          </div>
-          <div>
-            <PresetSelector />
-          </div>
-        </div>
-      </div>
-
-      {/* Output Tabs & Content */}
-      {(failure || store.result || store.scores || store.isLoading || store.isScoring || store.isStreaming) && (
-        <div className="space-y-4 animate-fade-in">
-          {/* Tab Bar — horizontal scroll on mobile */}
-          <div className="flex items-center gap-1 p-1 bg-surface rounded-xl border border-border w-full sm:w-fit overflow-x-auto">
-            {[
-              { id: 'output', label: 'Output', show: true },
-              { id: 'diff', label: 'Diff View', show: !!store.result },
-              { id: 'score', label: 'Score', show: true },
-            ]
-              .filter((t) => t.show)
-              .map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => store.setActiveTab(tab.id)}
-                  className={`px-4 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap cursor-pointer ${
-                    store.activeTab === tab.id
-                      ? 'bg-surface-hover text-text shadow-xs font-semibold'
-                      : 'text-text-muted hover:text-text-secondary'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-          </div>
-
-          {/* Tab Content */}
-          {store.activeTab === 'output' && <OutputPanel />}
-          {store.activeTab === 'diff' && <DiffView />}
-          {store.activeTab === 'score' && <PromptScoreCard />}
-        </div>
-      )}
     </div>
   );
 }

@@ -2,7 +2,7 @@ import usePromptStore from '../../store/promptStore';
 import { getScoreColor, getScoreBg } from '../../utils/formatters';
 import { Target, Lightbulb, Loader2 } from 'lucide-react';
 
-export default function PromptScoreCard() {
+export default function PromptScoreCard({ label }) {
   const { scores, isScoring } = usePromptStore();
 
   if (isScoring) {
@@ -35,7 +35,7 @@ export default function PromptScoreCard() {
     <div className="space-y-4 animate-fade-in">
       {/* Overall Score */}
       <div className="glass-card p-5 text-center">
-        <p className="text-xs text-text-muted uppercase tracking-wide mb-2">Overall Score</p>
+        <p className="text-xs text-text-muted uppercase tracking-wide mb-2">Overall score · {label}</p>
         <div className="relative w-24 h-24 mx-auto mb-3">
           <svg className="w-24 h-24 transform -rotate-90" viewBox="0 0 100 100">
             <circle cx="50" cy="50" r="42" fill="none" stroke="#1e293b" strokeWidth="8" />

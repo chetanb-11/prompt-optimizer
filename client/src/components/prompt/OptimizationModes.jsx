@@ -4,7 +4,7 @@ import { Sparkles, Minimize2, Brain, Terminal, Palette } from 'lucide-react';
 export const MODES = [
   {
     id: 'clarity',
-    label: 'Improve Clarity',
+    label: 'Make clearer',
     description: 'Remove ambiguity, add structure',
     icon: Sparkles,
     color: 'from-blue-500 to-cyan-500',
@@ -14,7 +14,7 @@ export const MODES = [
   },
   {
     id: 'concise',
-    label: 'Make Concise',
+    label: 'Make shorter',
     description: 'Minimize tokens, maximize info',
     icon: Minimize2,
     color: 'from-emerald-500 to-teal-500',
@@ -24,8 +24,8 @@ export const MODES = [
   },
   {
     id: 'reasoning',
-    label: 'Add Reasoning',
-    description: 'Chain-of-thought, step-by-step',
+    label: 'Add structure',
+    description: 'Organize the task into steps',
     icon: Brain,
     color: 'from-purple-500 to-violet-500',
     activeBg: 'bg-purple-500/10',
@@ -44,7 +44,7 @@ export const MODES = [
   },
   {
     id: 'tone',
-    label: 'Transform Tone',
+    label: 'Change tone',
     description: 'Formal, technical, or creative',
     icon: Palette,
     color: 'from-pink-500 to-rose-500',
@@ -69,7 +69,7 @@ export default function OptimizationModes() {
         Optimization Mode
       </label>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-3 gap-2">
         {MODES.map((m) => {
           const isActive = mode === m.id;
           const Icon = m.icon;
