@@ -76,8 +76,8 @@ export default function PromptInput() {
         </div>
 
         {/* Stats Bar */}
-        <div className="flex items-center justify-between px-4 py-2 border-t border-border text-xs text-text-muted">
-          <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3 sm:px-4 py-2 border-t border-border text-xs text-text-muted">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 sm:gap-x-4">
             <span>
               <span className="text-text-secondary font-medium">{words}</span> words
             </span>

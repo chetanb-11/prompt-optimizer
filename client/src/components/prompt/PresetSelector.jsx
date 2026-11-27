@@ -1,7 +1,7 @@
 import usePromptStore from '../../store/promptStore';
 import { MessageSquare, Bot, Gauge, BookOpen, Sparkles } from 'lucide-react';
 
-const PRESETS = [
+export const PRESETS = [
   { id: 'chatgpt', label: 'ChatGPT', icon: MessageSquare, desc: 'Optimized for ChatGPT conventions' },
   { id: 'claude', label: 'Claude', icon: Bot, desc: 'XML tags, detailed context' },
   { id: 'gemini', label: 'Gemini', icon: Sparkles, desc: 'Structured output, grounding context' },
@@ -28,6 +28,7 @@ export default function PresetSelector() {
               onClick={() => setPreset(p.id)}
               id={`preset-${p.id}`}
               title={p.desc}
+              aria-pressed={isActive}
               className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium border transition-all duration-200 ${
                 isActive
                   ? 'bg-accent/10 text-accent-light border-accent/30'

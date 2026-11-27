@@ -1,7 +1,7 @@
 import usePromptStore from '../../store/promptStore';
 import { Sparkles, Minimize2, Brain, Terminal, Palette } from 'lucide-react';
 
-const MODES = [
+export const MODES = [
   {
     id: 'clarity',
     label: 'Improve Clarity',
@@ -54,7 +54,7 @@ const MODES = [
   },
 ];
 
-const TONE_OPTIONS = [
+export const TONE_OPTIONS = [
   { id: 'formal', label: 'Formal' },
   { id: 'technical', label: 'Technical' },
   { id: 'creative', label: 'Creative' },
@@ -78,6 +78,7 @@ export default function OptimizationModes() {
               key={m.id}
               onClick={() => setMode(m.id)}
               id={`mode-${m.id}`}
+              aria-pressed={isActive}
               className={`relative flex flex-col items-start gap-1.5 p-3 rounded-xl border text-left transition-all duration-200 ${
                 isActive
                   ? `${m.activeBg} ${m.activeText} ${m.activeBorder}`
@@ -107,12 +108,13 @@ export default function OptimizationModes() {
 
       {/* Tone Style Selector (only when tone mode is active) */}
       {mode === 'tone' && (
-        <div className="flex items-center gap-2 animate-fade-in">
+        <div className="flex flex-wrap items-center gap-2 animate-fade-in">
           <span className="text-xs text-text-muted">Style:</span>
           {TONE_OPTIONS.map((t) => (
             <button
               key={t.id}
               onClick={() => setToneStyle(t.id)}
+              aria-pressed={toneStyle === t.id}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                 toneStyle === t.id
                   ? 'bg-pink-500/20 text-pink-300 border border-pink-500/30'

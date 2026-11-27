@@ -4,12 +4,12 @@ import useHistoryStore from '../store/historyStore';
 import useAnalyticsStore from '../store/analyticsStore';
 import { optimizePromptStream, reOptimizePromptStream, scorePrompt } from '../api/client';
 import PromptInput from '../components/prompt/PromptInput';
-import OptimizationModes from '../components/prompt/OptimizationModes';
-import PresetSelector from '../components/prompt/PresetSelector';
+import OptimizationModes, { MODES, TONE_OPTIONS } from '../components/prompt/OptimizationModes';
+import PresetSelector, { PRESETS } from '../components/prompt/PresetSelector';
 import OutputPanel from '../components/prompt/OutputPanel';
 import DiffView from '../components/prompt/DiffView';
 import PromptScoreCard from '../components/prompt/PromptScoreCard';
-import { Wand2, Target, RefreshCw, Loader2 } from 'lucide-react';
+import { Wand2, Target, RefreshCw, Loader2, ChevronDown } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function Optimizer() {
@@ -18,11 +18,16 @@ export default function Optimizer() {
   const { trackOptimization, trackScore } = useAnalyticsStore();
 
   const [failure, setFailure] = useState(null);
+  const [optionsOpen, setOptionsOpen] = useState(false);
   const [completion, setCompletion] = useState('');
   const [streamOpen, setStreamOpen] = useState(false);
   const [slowRequest, setSlowRequest] = useState(false);
   const activeRequest = useRef(null);
   const busy = store.isLoading || store.isScoring;
+  const modeLabel = MODES.find((mode) => mode.id === store.mode)?.label;
+  const toneLabel = store.mode === 'tone' && TONE_OPTIONS.find((tone) => tone.id === store.toneStyle)?.label;
+  const presetLabel = PRESETS.find((preset) => preset.id === store.preset)?.label ?? 'No preset';
+  const optionsSummary = [modeLabel, toneLabel, presetLabel].filter(Boolean).join(' · ');
 
   const waiting = busy && !store.streamingText;
   useEffect(() => {
@@ -160,7 +165,7 @@ export default function Optimizer() {
   }
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto">
+    <div className="space-y-4 sm:space-y-6 max-w-6xl mx-auto">
       {/* Page Header */}
       <div>
         <h1 className="text-xl sm:text-2xl font-bold text-text tracking-tight flex items-center gap-3">
@@ -177,22 +182,12 @@ export default function Optimizer() {
       {/* Input Section */}
       <PromptInput />
 
-      {/* Mode & Preset Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <OptimizationModes />
-        </div>
-        <div>
-          <PresetSelector />
-        </div>
-      </div>
-
       {/* Action Buttons */}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
         <button
           onClick={() => optimize()}
           disabled={busy || !store.prompt.trim()}
-          className="px-6 sm:px-8 py-3 rounded-xl font-semibold text-sm bg-gradient-to-r from-primary to-accent text-white hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-lg shadow-primary/20 cursor-pointer"
+          className="flex-1 sm:flex-none px-4 sm:px-8 py-3 rounded-xl font-semibold text-sm bg-gradient-to-r from-primary to-accent text-white hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-lg shadow-primary/20 cursor-pointer"
           id="optimize-btn"
         >
           {store.isLoading ? (
@@ -211,7 +206,7 @@ export default function Optimizer() {
         <button
           onClick={handleScore}
           disabled={busy || (!store.prompt.trim() && !store.result)}
-          className="px-5 sm:px-6 py-3 rounded-xl font-semibold text-sm bg-surface border border-border text-text-secondary hover:text-text hover:bg-surface-hover hover:border-border-light disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 cursor-pointer"
+          className="px-4 sm:px-6 py-3 rounded-xl font-semibold text-sm bg-surface border border-border text-text-secondary hover:text-text hover:bg-surface-hover hover:border-border-light disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 cursor-pointer"
           id="score-btn"
         >
           {store.isScoring ? (
@@ -256,6 +251,31 @@ export default function Optimizer() {
           </button>
         </div>
       )}
+
+      <div className="space-y-3">
+        <button
+          type="button"
+          aria-expanded={optionsOpen}
+          aria-controls="optimization-options"
+          onClick={() => setOptionsOpen((open) => !open)}
+          className="flex w-full items-center justify-between gap-3 rounded-xl border border-border bg-surface px-4 py-3 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary sm:hidden"
+        >
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold text-text">Optimization options</span>
+            <span className="mt-0.5 block text-xs text-text-secondary">{optionsSummary}</span>
+          </span>
+          <ChevronDown aria-hidden="true" className={`w-4 h-4 shrink-0 text-text-secondary transition-transform ${optionsOpen ? 'rotate-180' : ''}`} />
+        </button>
+
+        <div id="optimization-options" className={`${optionsOpen ? 'grid' : 'hidden sm:grid'} grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6`}>
+          <div className="lg:col-span-2">
+            <OptimizationModes />
+          </div>
+          <div>
+            <PresetSelector />
+          </div>
+        </div>
+      </div>
 
       {/* Output Tabs & Content */}
       {(failure || store.result || store.scores || store.isLoading || store.isScoring || store.isStreaming) && (
