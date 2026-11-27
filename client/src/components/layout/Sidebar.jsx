@@ -4,13 +4,23 @@ import {
   FlaskConical, BarChart3, ChevronLeft, ChevronRight, X,
 } from 'lucide-react';
 
-const NAV_ITEMS = [
-  { to: '/', icon: Zap, label: 'Optimizer' },
-  { to: '/history', icon: History, label: 'History' },
-  { to: '/templates', icon: LayoutTemplate, label: 'Templates' },
-  { to: '/chain', icon: GitBranch, label: 'Chain Builder' },
-  { to: '/testing', icon: FlaskConical, label: 'A/B Testing' },
-  { to: '/analytics', icon: BarChart3, label: 'Analytics' },
+const NAV_GROUPS = [
+  {
+    label: 'Prompts',
+    items: [
+      { to: '/', icon: Zap, label: 'Optimize' },
+      { to: '/templates', icon: LayoutTemplate, label: 'Templates' },
+      { to: '/history', icon: History, label: 'History' },
+    ],
+  },
+  {
+    label: 'Tools',
+    items: [
+      { to: '/chain', icon: GitBranch, label: 'Chain Builder' },
+      { to: '/testing', icon: FlaskConical, label: 'A/B Testing' },
+      { to: '/analytics', icon: BarChart3, label: 'Analytics' },
+    ],
+  },
 ];
 
 export default function Sidebar({
@@ -57,35 +67,36 @@ export default function Sidebar({
         )}
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 py-4 px-2 space-y-1 overflow-y-auto">
-        {NAV_ITEMS.map(({ to, icon: Icon, label }) => {
-          const isActive = location.pathname === to;
-          const showLabel = !collapsed || mobileOpen;
-          return (
-            <NavLink
-              key={to}
-              to={to}
-              onClick={handleNavClick}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group ${
-                isActive
-                  ? 'bg-primary/10 text-primary-light font-semibold'
-                  : 'text-text-secondary hover:text-text hover:bg-surface-hover'
-              }`}
-              title={collapsed && !mobileOpen ? label : undefined}
-            >
-              <Icon
-                className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${
-                  isActive ? 'text-primary-light' : 'text-text-muted group-hover:text-text-secondary'
-                }`}
-              />
-              {showLabel && <span className="animate-fade-in truncate">{label}</span>}
-              {isActive && showLabel && (
-                <div className="ml-auto w-1.5 h-1.5 rounded-full bg-primary animate-scale-in" />
-              )}
-            </NavLink>
-          );
-        })}
+      <nav aria-label="Main navigation" className="flex-1 space-y-4 overflow-y-auto px-2 py-4">
+        {NAV_GROUPS.map(({ label: group, items }) => (
+          <div key={group} role="group" aria-label={group} className="space-y-1">
+            {(!collapsed || mobileOpen) && (
+              <p aria-hidden="true" className="px-3 text-xs font-medium text-text-muted">{group}</p>
+            )}
+            {items.map(({ to, icon: Icon, label }) => {
+              const isActive = location.pathname === to;
+              const showLabel = !collapsed || mobileOpen;
+              return (
+                <NavLink
+                  key={to}
+                  to={to}
+                  end
+                  onClick={handleNavClick}
+                  aria-label={showLabel ? undefined : label}
+                  title={showLabel ? undefined : label}
+                  className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'bg-primary/10 font-semibold text-primary-light'
+                      : 'text-text-secondary hover:bg-surface-hover hover:text-text'
+                  }`}
+                >
+                  <Icon aria-hidden="true" className="h-[18px] w-[18px] shrink-0" />
+                  {showLabel && <span className="truncate">{label}</span>}
+                </NavLink>
+              );
+            })}
+          </div>
+        ))}
       </nav>
 
       {/* Footer — Collapse Toggle (desktop only) */}

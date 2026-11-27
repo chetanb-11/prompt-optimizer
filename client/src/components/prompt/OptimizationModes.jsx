@@ -1,10 +1,10 @@
 import usePromptStore from '../../store/promptStore';
 import { Sparkles, Minimize2, Brain, Terminal, Palette } from 'lucide-react';
 
-const MODES = [
+export const MODES = [
   {
     id: 'clarity',
-    label: 'Improve Clarity',
+    label: 'Make clearer',
     description: 'Remove ambiguity, add structure',
     icon: Sparkles,
     color: 'from-blue-500 to-cyan-500',
@@ -14,7 +14,7 @@ const MODES = [
   },
   {
     id: 'concise',
-    label: 'Make Concise',
+    label: 'Make shorter',
     description: 'Minimize tokens, maximize info',
     icon: Minimize2,
     color: 'from-emerald-500 to-teal-500',
@@ -24,8 +24,8 @@ const MODES = [
   },
   {
     id: 'reasoning',
-    label: 'Add Reasoning',
-    description: 'Chain-of-thought, step-by-step',
+    label: 'Add structure',
+    description: 'Organize the task into steps',
     icon: Brain,
     color: 'from-purple-500 to-violet-500',
     activeBg: 'bg-purple-500/10',
@@ -44,7 +44,7 @@ const MODES = [
   },
   {
     id: 'tone',
-    label: 'Transform Tone',
+    label: 'Change tone',
     description: 'Formal, technical, or creative',
     icon: Palette,
     color: 'from-pink-500 to-rose-500',
@@ -54,7 +54,7 @@ const MODES = [
   },
 ];
 
-const TONE_OPTIONS = [
+export const TONE_OPTIONS = [
   { id: 'formal', label: 'Formal' },
   { id: 'technical', label: 'Technical' },
   { id: 'creative', label: 'Creative' },
@@ -69,7 +69,7 @@ export default function OptimizationModes() {
         Optimization Mode
       </label>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-3 gap-2">
         {MODES.map((m) => {
           const isActive = mode === m.id;
           const Icon = m.icon;
@@ -78,6 +78,7 @@ export default function OptimizationModes() {
               key={m.id}
               onClick={() => setMode(m.id)}
               id={`mode-${m.id}`}
+              aria-pressed={isActive}
               className={`relative flex flex-col items-start gap-1.5 p-3 rounded-xl border text-left transition-all duration-200 ${
                 isActive
                   ? `${m.activeBg} ${m.activeText} ${m.activeBorder}`
@@ -107,12 +108,13 @@ export default function OptimizationModes() {
 
       {/* Tone Style Selector (only when tone mode is active) */}
       {mode === 'tone' && (
-        <div className="flex items-center gap-2 animate-fade-in">
+        <div className="flex flex-wrap items-center gap-2 animate-fade-in">
           <span className="text-xs text-text-muted">Style:</span>
           {TONE_OPTIONS.map((t) => (
             <button
               key={t.id}
               onClick={() => setToneStyle(t.id)}
+              aria-pressed={toneStyle === t.id}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                 toneStyle === t.id
                   ? 'bg-pink-500/20 text-pink-300 border border-pink-500/30'

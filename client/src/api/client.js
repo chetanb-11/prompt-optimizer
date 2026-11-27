@@ -125,7 +125,7 @@ const API_BASE = import.meta.env.VITE_API_URL || '/api';
  * Validates input client-side and retries on 503/429 before consuming the stream.
  *
  * @param {object} data - Request body (prompt, mode, etc.)
- * @param {object} callbacks - { onChunk, onDone, onError }
+ * @param {object} callbacks - { onOpen, onChunk, onDone, onError }
  * @returns {AbortController} Controller to cancel the stream
  */
 export function optimizePromptStream(data, callbacks) {
@@ -136,7 +136,7 @@ export function reOptimizePromptStream(data, callbacks) {
   return startPromptStream('/optimize/iterate', data, callbacks);
 }
 
-function startPromptStream(path, data, { onChunk, onDone, onError }) {
+function startPromptStream(path, data, { onOpen, onChunk, onDone, onError }) {
   const controller = new AbortController();
 
   // Client-side validation — catch empty prompts before hitting the network
@@ -173,6 +173,7 @@ function startPromptStream(path, data, { onChunk, onDone, onError }) {
           throw err;
         });
       }
+      onOpen?.();
       return consumeSSEStream(response, {
         onChunk,
         onDone: (result) => {
