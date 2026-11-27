@@ -1,5 +1,6 @@
+import { setTimeout as delayWithSignal } from 'node:timers/promises';
 import { AppError } from '../middleware/errorHandler.js';
-import { logModelEvent, recordModelTiming } from '../middleware/requestDiagnostics.js';
+import { logModelEvent, recordModelTiming, requestSignal } from '../middleware/requestDiagnostics.js';
 import { roughTokenCount } from '../utils/tokenEstimator.js';
 
 const FALLBACK_MODEL = 'gemini-2.5-flash';
@@ -69,61 +70,78 @@ function classifyGeminiError(error) {
   );
 }
 
-export async function generateWithRetry(apiFn, primaryModel) {
+async function withSignal(signal, run) {
+  if (!signal) return run();
+  signal.throwIfAborted();
+  let onAbort;
+  const aborted = new Promise((_, reject) => {
+    onAbort = () => reject(signal.reason);
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+  try {
+    return await Promise.race([run(), aborted]);
+  } finally {
+    signal.removeEventListener('abort', onAbort);
+  }
+}
+
+export async function generateWithRetry(apiFn, primaryModel, signal = requestSignal()) {
   const started = performance.now();
   try {
-    for (let attempt = 1; ; attempt++) {
-      try {
-        return await apiFn(primaryModel);
-      } catch (error) {
-        if (error instanceof AppError) throw error;
-        const status = error?.status || error?.httpStatusCode;
-        if (isRetryable(error) && attempt < MAX_ATTEMPTS) {
-          const delay = BASE_DELAY_MS * 2 ** (attempt - 1) * (0.75 + Math.random() * 0.5);
-          logModelEvent('model_retry', primaryModel, error);
-          await sleep(Math.round(delay));
-          continue;
-        }
-
-        // A missing model can use the fallback immediately. Retrying invalid
-        // input or credentials would send the same failing request again.
-        const canFallback = status === 404 || status === 408 || status === 429 || status >= 500 || error?.name === 'TimeoutError';
-        if (!canFallback || primaryModel === FALLBACK_MODEL) {
-          logModelEvent('model_failed', primaryModel, error);
-          throw classifyGeminiError(error);
-        }
-        logModelEvent('model_fallback', FALLBACK_MODEL, error);
-        break;
-      }
-    }
-    try {
-      return await apiFn(FALLBACK_MODEL);
-    } catch (error) {
-      logModelEvent('fallback_failed', FALLBACK_MODEL, error);
-      throw error instanceof AppError ? error : classifyGeminiError(error);
-    }
+    return await withSignal(signal, () => attemptGeneration(apiFn, primaryModel, signal));
   } finally {
     recordModelTiming('generation', started);
   }
 }
 
-export async function countWithDeadline(models, model, text) {
+async function attemptGeneration(apiFn, primaryModel, signal) {
+  for (let attempt = 1; ; attempt++) {
+    signal?.throwIfAborted();
+    try {
+      return await apiFn(primaryModel, signal);
+    } catch (error) {
+      signal?.throwIfAborted();
+      if (error instanceof AppError) throw error;
+      const status = error?.status || error?.httpStatusCode;
+      if (isRetryable(error) && attempt < MAX_ATTEMPTS) {
+        const delay = BASE_DELAY_MS * 2 ** (attempt - 1) * (0.75 + Math.random() * 0.5);
+        logModelEvent('model_retry', primaryModel, error);
+        if (signal) await delayWithSignal(Math.round(delay), undefined, { signal });
+        else await sleep(Math.round(delay));
+        continue;
+      }
+
+      // A missing model can use the fallback immediately. Retrying invalid
+      // input or credentials would send the same failing request again.
+      const canFallback = status === 404 || status === 408 || status === 429 || status >= 500 || error?.name === 'TimeoutError';
+      if (!canFallback || primaryModel === FALLBACK_MODEL) {
+        logModelEvent('model_failed', primaryModel, error);
+        throw classifyGeminiError(error);
+      }
+      logModelEvent('model_fallback', FALLBACK_MODEL, error);
+      break;
+    }
+  }
+  try {
+    return await apiFn(FALLBACK_MODEL, signal);
+  } catch (error) {
+    logModelEvent('fallback_failed', FALLBACK_MODEL, error);
+    throw error instanceof AppError ? error : classifyGeminiError(error);
+  }
+}
+
+export async function countWithDeadline(models, model, text, request = requestSignal()) {
   const started = performance.now();
   const controller = new AbortController();
-  let timer;
+  const signal = request ? AbortSignal.any([request, controller.signal]) : controller.signal;
+  const timer = setTimeout(() => controller.abort(), TOKEN_COUNT_TIMEOUT_MS);
   try {
-    const deadline = new Promise((_, reject) => {
-      timer = setTimeout(() => {
-        controller.abort();
-        reject(new Error('Token count timed out'));
-      }, TOKEN_COUNT_TIMEOUT_MS);
-    });
-    const response = await Promise.race([
-      models.countTokens({ model, contents: text, config: { abortSignal: controller.signal } }),
-      deadline,
-    ]);
+    const response = await withSignal(signal, () =>
+      models.countTokens({ model, contents: text, config: { abortSignal: signal } })
+    );
     return response.totalTokens ?? roughTokenCount(text);
   } catch (error) {
+    request?.throwIfAborted();
     logModelEvent(controller.signal.aborted ? 'token_count_timeout' : 'token_count_failed', model, error);
     return roughTokenCount(text);
   } finally {
