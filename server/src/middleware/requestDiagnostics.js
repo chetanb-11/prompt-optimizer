@@ -57,3 +57,10 @@ export function logModelEvent(event, model, error) {
     providerStatus: Number.isInteger(status) && status > 0 ? status : null,
   }));
 }
+
+export function recordModelTiming(stage, started) {
+  console.info(JSON.stringify({
+    event: 'model_timing', requestId: requests.getStore()?.requestId ?? null,
+    stage, durationMs: Math.round(performance.now() - started),
+  }));
+}
